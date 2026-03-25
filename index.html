@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Anagrammes Master FR</title>
+    <style>
+        :root { --primary: #38bdf8; --bg: #0f172a; --card: #1e293b; --danger: #ef4444; --missed: #fbbf24; --success: #22c55e; }
+        
+        body { 
+            font-family: 'Segoe UI', sans-serif; 
+            background: var(--bg); 
+            color: #f8fafc; 
+            margin: 0; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            min-height: 100vh;
+            padding-bottom: 120px; /* Espace pour le bandeau final */
+        }
+
+        .game-header { 
+            background: var(--card); 
+            width: 100%; 
+            padding: 1rem 0; 
+            text-align: center; 
+            position: sticky; 
+            top: 0; 
+            z-index: 10; 
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3);
+        }
+
+        .container { width: 95%; max-width: 900px; padding: 20px; text-align: center; }
+        
+        .timer-container { width: 100%; height: 6px; background: #334155; margin-top: 10px; }
+        #timer-bar { height: 100%; width: 100%; background: var(--primary); transition: width 1s linear; }
+
+        .letters { font-size: clamp(3rem, 10vw, 5rem); font-weight: 900; color: var(--primary); letter-spacing: 0.5rem; margin: 15px 0; text-transform: uppercase; }
+        
+        input { 
+            background: #1e293b; border: 2px solid #475569; color: white; padding: 12px; 
+            font-size: 1.8rem; border-radius: 0.8rem; width: 80%; max-width: 400px; 
+            outline: none; text-align: center; margin-bottom: 10px;
+        }
+        input:focus { border-color: var(--primary); }
+
+        /* Grilles par longueur */
+        .length-section { margin-top: 30px; text-align: left; }
+        .length-title { 
+            font-size: 0.8rem; font-weight: bold; color: #64748b; 
+            border-bottom: 1px solid #334155; padding-bottom: 4px; margin-bottom: 12px; 
+        }
+        
+        .word-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); 
+            gap: 8px; 
+        }
+        
+        .word-slot { 
+            background: #1e293b; padding: 8px; border-radius: 4px; 
+            font-family: 'Courier New', monospace; font-size: 1.1rem; 
+            text-align: center; border: 1px solid #334155;
+            white-space: nowrap; overflow: hidden; /* Garde le mot sur une ligne */
+            color: transparent; letter-spacing: 1px;
+        }
+        
+        .revealed { background: #0c4a6e; color: var(--primary) !important; border-color: var(--primary); letter-spacing: 0; font-weight: bold; }
+        .missed { background: #451a03; color: var(--missed) !important; border-color: var(--missed); letter-spacing: 0; font-style: italic; }
+
+        /* Bandeau de fin (en bas) */
+        #game-over-panel { 
+            position: fixed; bottom: 0; left: 0; right: 0; 
+            background: #1e293b; border-top: 4px solid var(--primary);
+            padding: 15px; display: none; flex-direction: row; 
+            align-items: center; justify-content: space-around; 
+            z-index: 100; box-shadow: 0 -10px 20px rgba(0,0,0,0.5);
+        }
+
+        button { 
+            background: var(--primary); color: #0f172a; border: none; 
+            padding: 12px 25px; font-weight: bold; border-radius: 6px; 
+            cursor: pointer; font-size: 1rem; 
+        }
+        button:hover { filter: brightness(1.1); }
+        .abandon-btn { background: transparent; color: #64748b; border: 1px solid #475569; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="game-header">
+    <div id="timer-text" style="font-family: monospace; font-size: 1.5rem;">03:00</div>
+    <div class="timer-container"><div id="timer-bar"></div></div>
+    <div id="loader" style="margin-top: 10px;">Chargement du dictionnaire...</div>
+</div>
+
+<div class="container" id="game-ui" style="display:none">
+    <div class="letters" id="scrambled-display">-------</div>
+    <input type="text" id="user-input" placeholder="Tapez..." autocomplete="off" autofocus>
+    <div id="score-info" style="color: #94a3b8; font-size: 0.9rem; margin: 10px 0;">Mots : 0 / 0</div>
+    
+    <div id="main-container"></div>
+    
+    <button class="abandon-btn" onclick="confirmEnd()">Abandonner & voir les solutions</button>
+</div>
+
+<div id="game-over-panel">
+    <div style="text-align: left;">
+        <div id="result-title" style="font-weight: bold; color: var(--primary); font-size: 1.2rem;">TERMINÉ</div>
+        <div id="final-score">Score : 0 / 0</div>
+    </div>
+    <button onclick="setupNewRound()">NOUVELLE PARTIE</button>
+</div>
+
+<script>
+    let fullDictionary = [];
+    let currentRound = { baseWord: "", solutions: [], found: [], timeLeft: 180, active: false };
+    let timerInterval;
+
+    const normalize = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+
+    async function loadDict() {
+        try {
+            const resp = await fetch('https://raw.githubusercontent.com/words/an-array-of-french-words/master/index.json');
+            const words = await resp.json();
+            fullDictionary = words.filter(w => w.length >= 4 && w.length <= 8).map(w => normalize(w));
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('game-ui').style.display = 'block';
+            setupNewRound();
+        } catch (e) { document.getElementById('loader').innerText = "Erreur réseau."; }
+    }
+
+    function setupNewRound() {
+        clearInterval(timerInterval);
+        document.getElementById('game-over-panel').style.display = 'none';
+        const input = document.getElementById('user-input');
+        input.disabled = false; input.value = ""; input.focus();
+        
+        const targetLength = [6, 7, 8][Math.floor(Math.random() * 3)];
+        const pool = fullDictionary.filter(w => w.length === targetLength);
+        const base = pool[Math.floor(Math.random() * pool.length)];
+        
+        const baseFreq = {};
+        for (let l of base) baseFreq[l] = (baseFreq[l] || 0) + 1;
+
+        const possible = Array.from(new Set(fullDictionary.filter(w => w.length >= 4 && canForm(w, baseFreq))))
+                        .sort((a,b) => a.length - b.length || a.localeCompare(b));
+
+        currentRound = { baseWord: base, solutions: possible, found: [], timeLeft: 180, active: true };
+        startTimer();
+        renderUI();
+    }
+
+    function canForm(word, lettersFreq) {
+        const freq = {};
+        for (let l of word) freq[l] = (freq[l] || 0) + 1;
+        for (let l in freq) if (!lettersFreq[l] || freq[l] > lettersFreq[l]) return false;
+        return true;
+    }
+
+    function renderUI() {
+        document.getElementById('scrambled-display').innerText = currentRound.baseWord.split('').sort(() => Math.random() - 0.5).join('');
+        const container = document.getElementById('main-container');
+        container.innerHTML = '';
+        
+        const groups = {};
+        currentRound.solutions.forEach(word => {
+            if (!groups[word.length]) groups[word.length] = [];
+            groups[word.length].push(word);
+        });
+
+        Object.keys(groups).forEach(len => {
+            const section = document.createElement('div');
+            section.className = 'length-section';
+            section.innerHTML = `<div class="length-title">${len} LETTRES</div>`;
+            const grid = document.createElement('div');
+            grid.className = 'word-grid';
+            
+            groups[len].forEach(word => {
+                const slot = document.createElement('div');
+                slot.className = 'word-slot';
+                slot.id = 'word-' + word;
+                slot.innerText = "_ ".repeat(word.length).trim();
+                grid.appendChild(slot);
+            });
+            section.appendChild(grid);
+            container.appendChild(section);
+        });
+        updateScore();
+    }
+
+    function startTimer() {
+        timerInterval = setInterval(() => {
+            currentRound.timeLeft--;
+            const mins = Math.floor(currentRound.timeLeft / 60);
+            const secs = currentRound.timeLeft % 60;
+            document.getElementById('timer-text').innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
+            document.getElementById('timer-bar').style.width = (currentRound.timeLeft / 180 * 100) + "%";
+            if (currentRound.timeLeft <= 0) endGame("TEMPS ÉCOULÉ !");
+        }, 1000);
+    }
+
+    function updateScore() {
+        document.getElementById('score-info').innerText = `Mots : ${currentRound.found.length} / ${currentRound.solutions.length}`;
+        if (currentRound.found.length === currentRound.solutions.length && currentRound.active) endGame("PARFAIT !");
+    }
+
+    function endGame(title) {
+        if (!currentRound.active) return;
+        currentRound.active = false;
+        clearInterval(timerInterval);
+        document.getElementById('user-input').disabled = true;
+
+        currentRound.solutions.forEach(word => {
+            const el = document.getElementById('word-' + word);
+            if (!currentRound.found.includes(word)) {
+                el.innerText = word;
+                el.classList.add('missed');
+            }
+        });
+
+        document.getElementById('result-title').innerText = title;
+        document.getElementById('final-score').innerText = `${currentRound.found.length} / ${currentRound.solutions.length} mots trouvés`;
+        document.getElementById('game-over-panel').style.display = 'flex';
+    }
+
+    function confirmEnd() { if(confirm("Révéler toutes les solutions ?")) endGame("ABANDON"); }
+
+    document.getElementById('user-input').addEventListener('input', (e) => {
+        if (!currentRound.active) return;
+        const val = normalize(e.target.value);
+        if (currentRound.solutions.includes(val) && !currentRound.found.includes(val)) {
+            currentRound.found.push(val);
+            const el = document.getElementById('word-' + val);
+            el.innerText = val;
+            el.classList.add('revealed');
+            e.target.value = '';
+            updateScore();
+        }
+    });
+
+    document.getElementById('user-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') e.target.value = '';
+    });
+
+    loadDict();
+</script>
+
+</body>
+</html>
