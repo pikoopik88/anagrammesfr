@@ -137,15 +137,34 @@
             }
         });
 
-        if (isHost) {
-            peer.on('connection', (c) => {
-                connections.push(c);
-                if (currentRound.active) {
-                    c.on('open', () => c.send({ type: 'SYNC', round: currentRound }));
-                }
-                c.on('data', (data) => { if (data.type === 'GUESS') handleGuess(data.word); });
+        // Dans la section du Host (isHost = true)
+peer.on('connection', (c) => {
+    connections.push(c);
+    
+    // On attend que la connexion soit vraiment ouverte avant d'envoyer la synchro
+    c.on('open', () => {
+        console.log("Nouveau joueur connecté : " + c.peer);
+        if (currentRound.active) {
+            // ENVOI IMMÉDIAT de l'état actuel au nouveau venu
+            c.send({ 
+                type: 'SYNC', 
+                round: {
+                    ...currentRound,
+                    // On s'assure d'envoyer les mots déjà trouvés
+                    found: currentRound.found 
+                } 
             });
         }
+    });
+
+    c.on('data', (data) => {
+        if (data.type === 'GUESS') handleGuess(data.word);
+    });
+    
+    c.on('close', () => {
+        connections = connections.filter(conn => conn !== c);
+    });
+});
     }
 
     function setupClientEvents(c) {
