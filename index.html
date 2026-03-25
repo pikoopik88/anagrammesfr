@@ -40,12 +40,26 @@
 
 <div class="container">
     <div id="setup-ui" class="connection-box">
-        <h2 id="status-msg">Initialisation...</h2>
-        <p id="share-area" style="display:none">Envoyez ce lien aux joueurs : <br> 
-           <b id="game-link" class="share-link"></b>
-        </p>
-        <button id="start-btn" style="display:none" onclick="setupNewRound()">LANCER LA PARTIE</button>
+    <h2 id="status-msg">Initialisation du multijoueur...</h2>
+    
+    <div id="share-area" style="display:none; margin: 20px 0;">
+        <p style="color: #94a3b8; margin-bottom: 10px;">Partage ce lien avec tes joueurs :</p>
+        
+        <div style="display: flex; justify-content: center; gap: 10px; max-width: 500px; margin: 0 auto;">
+            <input type="text" id="game-link-input" readonly 
+                   style="font-size: 1rem; padding: 10px; width: 70%; background: #0f172a; border-radius: 6px; cursor: default;">
+            
+            <button id="copy-btn" onclick="copyGameLink()" 
+                    style="font-size: 0.9rem; padding: 10px 15px; background: #22c55e; white-space: nowrap; transition: all 0.2s;">
+                📋 Copier le lien
+            </button>
+        </div>
     </div>
+    
+    <button id="start-btn" style="display:none; background: var(--primary); margin-top: 15px;" onclick="setupNewRound()">
+        🚀 LANCER LA PARTIE
+    </button>
+</div>
 
     <div id="game-ui" style="display:none">
         <div class="letters" id="scrambled-display">-------</div>
@@ -73,39 +87,61 @@
     // 1. INITIALISATION MULTIJOUEUR
     const urlParams = new URLSearchParams(window.location.search);
     const joinId = urlParams.get('join');
+// Remplace le bloc "if (joinId) { ... } else { ... }" par celui-ci :
 
-    if (joinId) {
-        // Mode JOUEUR
-        peer = new Peer();
-        peer.on('open', (id) => {
-            document.getElementById('status-msg').innerText = "Connexion au host...";
-            conn = peer.connect(joinId);
-            setupClientEvents(conn);
-        });
-    } else {
-        // Mode HOST
-        isHost = true;
-        peer = new Peer();
-        peer.on('open', (id) => {
-            const link = window.location.href + "?join=" + id;
-            document.getElementById('status-msg').innerText = "Vous êtes le Host !";
-            document.getElementById('game-link').innerText = link;
-            document.getElementById('share-area').style.display = "block";
-            document.getElementById('start-btn').style.display = "inline-block";
-            
-            document.getElementById('game-link').onclick = () => {
-                navigator.clipboard.writeText(link);
-                alert("Lien copié !");
-            };
-        });
+if (joinId) {
+    // Mode JOUEUR
+    peer = new Peer();
+    peer.on('open', (id) => {
+        document.getElementById('status-msg').innerText = "Connexion au Host...";
+        conn = peer.connect(joinId);
+        setupClientEvents(conn);
+    });
+} else {
+    // Mode HOST
+    isHost = true;
+    peer = new Peer();
+    peer.on('open', (id) => {
+        // Nettoyer l'URL actuelle s'il y avait d'anciens paramètres
+        const baseUrl = window.location.href.split('?')[0];
+        const link = baseUrl + "?join=" + id;
 
-        peer.on('connection', (c) => {
-            connections.push(c);
-            c.on('data', (data) => {
-                if (data.type === 'GUESS') handleGuess(data.word);
-            });
+        document.getElementById('status-msg').innerText = "Tu es le Host !";
+        document.getElementById('game-link-input').value = link; // Remplir l'input
+        document.getElementById('share-area').style.display = "block";
+        document.getElementById('start-btn').style.display = "inline-block";
+    });
+
+    peer.on('connection', (c) => {
+        connections.push(c);
+        c.on('data', (data) => {
+            if (data.type === 'GUESS') handleGuess(data.word);
         });
-    }
+    });
+}
+
+// AJOUTE CETTE NOUVELLE FONCTION N'IMPORTE OÙ DANS TON SCRIPT :
+function copyGameLink() {
+    const linkInput = document.getElementById('game-link-input');
+    const copyBtn = document.getElementById('copy-btn');
+
+    // On copie le texte
+    navigator.clipboard.writeText(linkInput.value).then(() => {
+        // Animation du bouton
+        copyBtn.innerText = "✅ Lien copié !";
+        copyBtn.style.background = "#38bdf8"; // Passe au bleu ciel
+        copyBtn.style.color = "#0f172a";
+
+        // Reset après 2 secondes
+        setTimeout(() => {
+            copyBtn.innerText = "📋 Copier le lien";
+            copyBtn.style.background = "#22c55e"; // Repasse au vert
+            copyBtn.style.color = "#0f172a";
+        }, 2000);
+    }).catch(err => {
+        alert("Impossible de copier le lien automatiquement. Fais-le manuellement !");
+    });
+}
 
     // 2. LOGIQUE DE JEU
     async function loadDict() {
