@@ -52,4 +52,263 @@
             white-space: nowrap; color: transparent; transition: all 0.3s;
         }
         
-        .
+        .revealed { background: #0c4a6e; color: var(--primary) !important; border-color: var(--primary); font-weight: bold; }
+        .missed { background: #451a03; color: var(--missed) !important; border-color: var(--missed); font-style: italic; }
+
+        /* Bandeau de Fin fixe */
+        #game-over-panel { 
+            position: fixed; bottom: 0; left: 0; right: 0; background: #1e293b; 
+            border-top: 4px solid var(--primary); padding: 20px; 
+            display: none; justify-content: space-around; align-items: center; z-index: 100;
+        }
+
+        button { padding: 12px 25px; font-weight: bold; border-radius: 8px; border: none; cursor: pointer; transition: transform 0.1s; }
+        button:active { transform: scale(0.95); }
+        .btn-primary { background: var(--primary); color: #0f172a; }
+        .btn-success { background: var(--success); color: white; }
+    </style>
+</head>
+<body>
+
+<div class="game-header">
+    <div id="timer-text" style="font-family: monospace; font-size: 1.8rem;">03:00</div>
+    <div class="timer-container"><div id="timer-bar"></div></div>
+</div>
+
+<div class="container">
+    <div id="setup-ui" class="connection-box">
+        <h2 id="status-msg">Chargement du dictionnaire...</h2>
+        <div id="share-area" style="display:none">
+            <p>Partagez ce lien pour inviter des joueurs :</p>
+            <div class="copy-group">
+                <input type="text" id="game-link-input" readonly>
+                <button class="btn-primary" id="copy-btn" onclick="copyGameLink()">📋 Copier</button>
+            </div>
+            <button class="btn-success" id="start-btn" style="display:none" onclick="setupNewRound()">🚀 LANCER LA PARTIE</button>
+        </div>
+    </div>
+
+    <div id="game-ui" style="display:none">
+        <div class="letters" id="scrambled-display">-------</div>
+        <input type="text" id="user-input" placeholder="Tapez un mot..." autocomplete="off">
+        <div id="score-info" style="color: #94a3b8; font-weight: bold; margin: 15px 0;">Mots : 0 / 0</div>
+        <div id="main-container"></div>
+    </div>
+</div>
+
+<div id="game-over-panel">
+    <div style="text-align: left;">
+        <div id="result-title" style="font-weight: bold; color: var(--primary); font-size: 1.3rem;">TERMINÉ</div>
+        <div id="final-res">Score : 0 / 0</div>
+    </div>
+    <button id="restart-btn" class="btn-success" style="display:none" onclick="setupNewRound()">🔄 REJOUER</button>
+</div>
+
+<script>
+    let peer, conn, connections = [], isHost = false;
+    let fullDictionary = [];
+    let currentRound = { baseWord: "", solutions: [], found: [], timeLeft: 180, active: false };
+    let timerInterval;
+
+    const normalize = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+
+    // 1. GESTION DU RÉSEAU (PEERJS)
+    const urlParams = new URLSearchParams(window.location.search);
+    const joinId = urlParams.get('join');
+
+    async function init() {
+        await loadDict();
+        
+        peer = new Peer();
+        
+        peer.on('open', (id) => {
+            if (joinId) {
+                isHost = false;
+                document.getElementById('status-msg').innerText = "Connexion au Host...";
+                conn = peer.connect(joinId);
+                setupClientEvents(conn);
+            } else {
+                isHost = true;
+                const baseUrl = window.location.href.split('?')[0];
+                document.getElementById('game-link-input').value = baseUrl + "?join=" + id;
+                document.getElementById('status-msg').innerText = "Prêt à héberger !";
+                document.getElementById('share-area').style.display = "block";
+                document.getElementById('start-btn').style.display = "inline-block";
+            }
+        });
+
+        if (isHost) {
+            peer.on('connection', (c) => {
+                connections.push(c);
+                if (currentRound.active) {
+                    c.on('open', () => c.send({ type: 'SYNC', round: currentRound }));
+                }
+                c.on('data', (data) => { if (data.type === 'GUESS') handleGuess(data.word); });
+            });
+        }
+    }
+
+    function setupClientEvents(c) {
+        c.on('data', (data) => handleIncomingData(data));
+        c.on('open', () => document.getElementById('status-msg').innerText = "Connecté ! En attente du Host...");
+    }
+
+    function handleIncomingData(data) {
+        if (data.type === 'START' || data.type === 'SYNC') {
+            currentRound = data.round;
+            currentRound.active = true;
+            document.getElementById('setup-ui').style.display = 'none';
+            document.getElementById('game-ui').style.display = 'block';
+            document.getElementById('game-over-panel').style.display = 'none';
+            document.getElementById('user-input').disabled = false;
+            document.getElementById('user-input').value = "";
+            renderUI();
+            currentRound.found.forEach(w => revealWordUI(w, 'revealed'));
+            startVisualTimer();
+        }
+        if (data.type === 'UPDATE') {
+            revealWordUI(data.word, 'revealed');
+            currentRound.found.push(data.word);
+            updateScoreText();
+        }
+        if (data.type === 'END') {
+            showEndScreen(data.title, data.allSolutions);
+        }
+    }
+
+    // 2. LOGIQUE DE JEU
+    async function loadDict() {
+        const resp = await fetch('https://raw.githubusercontent.com/words/an-array-of-french-words/master/index.json');
+        const words = await resp.json();
+        fullDictionary = words.filter(w => w.length >= 4 && w.length <= 8).map(w => normalize(w));
+    }
+
+    function setupNewRound() {
+        if (!isHost) return;
+        const targetLength = [6, 7, 8][Math.floor(Math.random() * 3)];
+        const pool = fullDictionary.filter(w => w.length === targetLength);
+        const base = pool[Math.floor(Math.random() * pool.length)];
+        const baseFreq = {};
+        for (let l of base) baseFreq[l] = (baseFreq[l] || 0) + 1;
+        
+        const possible = Array.from(new Set(fullDictionary.filter(w => w.length >= 4 && canForm(w, baseFreq))))
+                        .sort((a,b) => a.length - b.length || a.localeCompare(b));
+
+        currentRound = { baseWord: base, solutions: possible, found: [], timeLeft: 180, active: true };
+        broadcast({ type: 'START', round: currentRound });
+        startHostLogic();
+    }
+
+    function handleGuess(word) {
+        const val = normalize(word);
+        if (currentRound.active && currentRound.solutions.includes(val) && !currentRound.found.includes(val)) {
+            currentRound.found.push(val);
+            broadcast({ type: 'UPDATE', word: val, foundCount: currentRound.found.length });
+            if (currentRound.found.length === currentRound.solutions.length) {
+                broadcast({ type: 'END', title: "VICTOIRE !", allSolutions: currentRound.solutions });
+            }
+        }
+    }
+
+    function broadcast(data) {
+        connections.forEach(c => { if(c.open) c.send(data); });
+        handleIncomingData(data);
+    }
+
+    function renderUI() {
+        document.getElementById('scrambled-display').innerText = currentRound.baseWord.split('').sort(() => Math.random() - 0.5).join('');
+        const container = document.getElementById('main-container');
+        container.innerHTML = '';
+        
+        const groups = {};
+        currentRound.solutions.forEach(w => {
+            if(!groups[w.length]) groups[w.length] = [];
+            groups[w.length].push(w);
+        });
+
+        Object.keys(groups).forEach(len => {
+            const sec = document.createElement('div');
+            sec.className = 'length-section';
+            sec.innerHTML = `<div class="length-title">${len} LETTRES</div>`;
+            const grid = document.createElement('div');
+            grid.className = 'word-grid';
+            groups[len].forEach(w => {
+                const slot = document.createElement('div');
+                slot.className = 'word-slot';
+                slot.id = 'word-' + w;
+                slot.innerText = "_ ".repeat(w.length).trim();
+                grid.appendChild(slot);
+            });
+            sec.appendChild(grid);
+            container.appendChild(sec);
+        });
+        updateScoreText();
+    }
+
+    function revealWordUI(word, className) {
+        const el = document.getElementById('word-' + word);
+        if (el) { el.innerText = word; el.className = 'word-slot ' + className; }
+    }
+
+    function startHostLogic() {
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            currentRound.timeLeft--;
+            if (currentRound.timeLeft <= 0) {
+                broadcast({ type: 'END', title: "TEMPS ÉCOULÉ !", allSolutions: currentRound.solutions });
+            }
+        }, 1000);
+    }
+
+    function startVisualTimer() {
+        const bar = document.getElementById('timer-bar');
+        const txt = document.getElementById('timer-text');
+        const localInt = setInterval(() => {
+            if (!currentRound.active) { clearInterval(localInt); return; }
+            const mins = Math.floor(currentRound.timeLeft / 60);
+            const secs = currentRound.timeLeft % 60;
+            txt.innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
+            bar.style.width = (currentRound.timeLeft / 180 * 100) + "%";
+            bar.style.background = currentRound.timeLeft < 30 ? "var(--danger)" : "var(--primary)";
+        }, 1000);
+    }
+
+    function showEndScreen(title, allSolutions) {
+        currentRound.active = false;
+        document.getElementById('user-input').disabled = true;
+        allSolutions.forEach(w => { if(!currentRound.found.includes(w)) revealWordUI(w, 'missed'); });
+        document.getElementById('result-title').innerText = title;
+        document.getElementById('final-res').innerText = `Score : ${currentRound.found.length} / ${allSolutions.length}`;
+        document.getElementById('game-over-panel').style.display = 'flex';
+        if(isHost) document.getElementById('restart-btn').style.display = 'block';
+    }
+
+    // 3. UTILITAIRES
+    function canForm(word, freq) {
+        const f = {}; for (let l of word) f[l] = (f[l] || 0) + 1;
+        for (let l in f) if (!freq[l] || f[l] > freq[l]) return false;
+        return true;
+    }
+
+    function updateScoreText() {
+        document.getElementById('score-info').innerText = `Mots : ${currentRound.found.length} / ${currentRound.solutions.length}`;
+    }
+
+    function copyGameLink() {
+        const input = document.getElementById('game-link-input');
+        navigator.clipboard.writeText(input.value);
+        const btn = document.getElementById('copy-btn');
+        btn.innerText = "✅ Copié !";
+        setTimeout(() => btn.innerText = "📋 Copier", 2000);
+    }
+
+    document.getElementById('user-input').addEventListener('input', (e) => {
+        const val = normalize(e.target.value);
+        if (isHost) handleGuess(val); else if(conn) conn.send({ type: 'GUESS', word: val });
+        if (currentRound.solutions.includes(val)) e.target.value = "";
+    });
+
+    init();
+</script>
+</body>
+</html>
