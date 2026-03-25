@@ -1,203 +1,55 @@
-<div id="setup-ui" class="connection-box">
-    <h2 id="status-msg">Initialisation du multijoueur...</h2>
-    
-    <div id="share-area" style="display:none; margin: 20px 0;">
-        <p style="color: #94a3b8; margin-bottom: 10px;">Partage ce lien avec tes joueurs :</p>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anagrammes Master - Multi Pro</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        :root { --primary: #38bdf8; --bg: #0f172a; --card: #1e293b; --danger: #ef4444; --missed: #fbbf24; --success: #22c55e; }
         
-        <div style="display: flex; justify-content: center; gap: 10px; max-width: 500px; margin: 0 auto;">
-            <input type="text" id="game-link-input" readonly 
-                   style="font-size: 1rem; padding: 10px; width: 70%; background: #0f172a; border-radius: 6px; cursor: default;">
-            
-            <button id="copy-btn" onclick="copyGameLink()" 
-                    style="font-size: 0.9rem; padding: 10px 15px; background: #22c55e; white-space: nowrap; transition: all 0.2s;">
-                📋 Copier le lien
-            </button>
-        </div>
-    </div>
-    
-    <button id="start-btn" style="display:none; background: var(--primary); margin-top: 15px;" onclick="setupNewRound()">
-        🚀 LANCER LA PARTIE
-    </button>
-</div>
-
-let peer, conn;
-let connections = []; 
-let isHost = false;
-let fullDictionary = [];
-let currentRound = { baseWord: "", solutions: [], found: [], timeLeft: 180, active: false };
-let timerInterval;
-
-const normalize = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
-
-// 1. INITIALISATION
-const urlParams = new URLSearchParams(window.location.search);
-const joinId = urlParams.get('join');
-
-if (joinId) {
-    isHost = false;
-    peer = new Peer();
-    peer.on('open', (id) => {
-        document.getElementById('status-msg').innerText = "Connexion au Host...";
-        conn = peer.connect(joinId);
-        setupClientEvents(conn);
-    });
-} else {
-    isHost = true;
-    peer = new Peer();
-    peer.on('open', (id) => {
-        const baseUrl = window.location.href.split('?')[0];
-        const link = baseUrl + "?join=" + id;
-        document.getElementById('status-msg').innerText = "Tu es le Host !";
-        document.getElementById('game-link-input').value = link;
-        document.getElementById('share-area').style.display = "block";
-        document.getElementById('start-btn').style.display = "inline-block";
-    });
-
-    peer.on('connection', (c) => {
-        connections.push(c);
-        
-        // --- NOUVEAU : SYNC SI PARTIE EN COURS ---
-        if (currentRound.active) {
-            c.on('open', () => {
-                c.send({ type: 'SYNC_JOIN', round: currentRound });
-            });
+        body { 
+            font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #f8fafc; 
+            margin: 0; display: flex; flex-direction: column; align-items: center; 
+            min-height: 100vh; padding-bottom: 140px; 
         }
 
-        c.on('data', (data) => {
-            if (data.type === 'GUESS') handleGuess(data.word);
-        });
-    });
-}
-
-async function loadDict() {
-    try {
-        const resp = await fetch('https://raw.githubusercontent.com/words/an-array-of-french-words/master/index.json');
-        const words = await resp.json();
-        fullDictionary = words.filter(w => w.length >= 4 && w.length <= 8).map(w => normalize(w));
-    } catch(e) { console.error("Erreur dico", e); }
-}
-
-// 2. LANCEMENT / REJOUER
-function setupNewRound() {
-    if (!isHost) return;
-    
-    // Reset local
-    clearInterval(timerInterval);
-    
-    const targetLength = [6, 7, 8][Math.floor(Math.random() * 3)];
-    const pool = fullDictionary.filter(w => w.length === targetLength);
-    const base = pool[Math.floor(Math.random() * pool.length)];
-    
-    const baseFreq = {};
-    for (let l of base) baseFreq[l] = (baseFreq[l] || 0) + 1;
-    const possible = Array.from(new Set(fullDictionary.filter(w => w.length >= 4 && canForm(w, baseFreq))))
-                    .sort((a,b) => a.length - b.length || a.localeCompare(b));
-
-    currentRound = { 
-        baseWord: base, 
-        solutions: possible, 
-        found: [], 
-        timeLeft: 180, 
-        active: true 
-    };
-    
-    // On cache le panneau de fin et on lance chez tout le monde
-    broadcast({ type: 'START', round: currentRound });
-    startHostTimer();
-}
-
-function handleGuess(word) {
-    if (!currentRound.active) return;
-    const val = normalize(word);
-    if (currentRound.solutions.includes(val) && !currentRound.found.includes(val)) {
-        currentRound.found.push(val);
-        broadcast({ type: 'UPDATE', word: val, foundCount: currentRound.found.length });
-        
-        if (currentRound.found.length === currentRound.solutions.length) {
-            broadcast({ type: 'END', title: "PARFAIT !", allSolutions: currentRound.solutions });
+        /* Header & Chrono */
+        .game-header { 
+            background: var(--card); width: 100%; padding: 10px 0; text-align: center; 
+            position: sticky; top: 0; z-index: 10; box-shadow: 0 10px 15px rgba(0,0,0,0.3);
         }
-    }
-}
+        .timer-container { width: 100%; height: 6px; background: #334155; margin-top: 10px; overflow: hidden; }
+        #timer-bar { height: 100%; width: 100%; background: var(--primary); transition: width 1s linear; }
 
-function broadcast(data) {
-    connections.forEach(c => { if(c.open) c.send(data); });
-    handlePeerData(data); // Appliquer à soi-même
-}
-
-function setupClientEvents(c) {
-    c.on('data', (data) => handlePeerData(data));
-    c.on('open', () => {
-        document.getElementById('status-msg').innerText = "Connecté ! En attente du début...";
-    });
-}
-
-function handlePeerData(data) {
-    if (data.type === 'START' || data.type === 'SYNC_JOIN') {
-        currentRound = data.round;
-        currentRound.active = true;
-        document.getElementById('setup-ui').style.display = 'none';
-        document.getElementById('game-ui').style.display = 'block';
-        document.getElementById('game-over-panel').style.display = 'none';
-        document.getElementById('user-input').disabled = false;
-        document.getElementById('user-input').value = "";
-        renderGrid();
+        .container { width: 95%; max-width: 900px; padding: 20px; text-align: center; }
         
-        // Afficher les mots déjà trouvés si on rejoint en cours
-        currentRound.found.forEach(w => updateUIFound(w));
+        /* Setup / Connexion */
+        .connection-box { background: var(--card); padding: 2rem; border-radius: 1.5rem; border: 2px dashed var(--primary); margin-top: 20px; }
+        .copy-group { display: flex; justify-content: center; gap: 10px; margin: 20px 0; }
+        .copy-group input { 
+            background: #0f172a; border: 1px solid #475569; color: var(--primary); 
+            padding: 10px; border-radius: 6px; width: 60%; font-size: 0.9rem; 
+        }
+
+        /* Jeu */
+        .letters { font-size: clamp(3rem, 10vw, 5rem); font-weight: 900; color: var(--primary); letter-spacing: 0.5rem; margin: 15px 0; text-transform: uppercase; text-shadow: 0 0 20px rgba(56, 189, 248, 0.4); }
+        #user-input { 
+            background: #1e293b; border: 2px solid #475569; color: white; padding: 12px; 
+            font-size: 1.8rem; border-radius: 0.8rem; width: 80%; max-width: 400px; 
+            outline: none; text-align: center; 
+        }
+        #user-input:focus { border-color: var(--primary); }
+        #user-input:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        /* Grilles et Sections */
+        .length-section { margin-top: 30px; text-align: left; }
+        .length-title { font-size: 0.9rem; font-weight: bold; color: #64748b; border-bottom: 1px solid #334155; padding-bottom: 5px; margin-bottom: 12px; }
+        .word-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+        .word-slot { 
+            background: #0f172a; padding: 10px; border-radius: 6px; border: 1px solid #334155;
+            font-family: 'Courier New', monospace; font-size: 1.1rem; text-align: center;
+            white-space: nowrap; color: transparent; transition: all 0.3s;
+        }
         
-        // Lancer le chrono visuel
-        startVisualTimer();
-    }
-    if (data.type === 'UPDATE') {
-        updateUIFound(data.word);
-        currentRound.found.length = data.foundCount;
-        updateScoreText();
-    }
-    if (data.type === 'END') {
-        showEndScreen(data.title, data.allSolutions);
-    }
-}
-
-// 3. VISUELS ET TIMERS
-function startHostTimer() {
-    clearInterval(timerInterval);
-    timerInterval = setInterval(() => {
-        currentRound.timeLeft--;
-        if (currentRound.timeLeft <= 0) {
-            broadcast({ type: 'END', title: "TEMPS ÉCOULÉ !", allSolutions: currentRound.solutions });
-        }
-    }, 1000);
-}
-
-function startVisualTimer() {
-    clearInterval(timerInterval);
-    timerInterval = setInterval(() => {
-        const mins = Math.floor(currentRound.timeLeft / 60);
-        const secs = currentRound.timeLeft % 60;
-        document.getElementById('timer-text').innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
-        document.getElementById('timer-bar').style.width = (currentRound.timeLeft / 180 * 100) + "%";
-    }, 1000);
-}
-
-function showEndScreen(title, allSolutions) {
-    currentRound.active = false;
-    clearInterval(timerInterval);
-    document.getElementById('user-input').disabled = true;
-
-    allSolutions.forEach(w => {
-        const el = document.getElementById('word-' + w);
-        if (el && !el.classList.contains('revealed')) {
-            el.innerText = w; el.classList.add('missed');
-        }
-    });
-
-    document.getElementById('result-title').innerText = title;
-    document.getElementById('final-res').innerText = `Score final : ${currentRound.found.length} / ${allSolutions.length}`;
-    document.getElementById('game-over-panel').style.display = 'flex';
-    
-    if(isHost) {
-        document.getElementById('restart-btn').style.display = 'block';
-    }
-}
-
-// (Le reste des fonctions utilitaires comme renderGrid, canForm, updateUIFound restent identiques)
+        .
