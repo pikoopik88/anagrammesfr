@@ -1,96 +1,18 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <title>Anagrammes Master MULTI</title>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <style>
-        :root { --primary: #38bdf8; --bg: #0f172a; --card: #1e293b; --danger: #ef4444; --missed: #fbbf24; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #f8fafc; margin: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding-bottom: 120px; }
-        
-        .game-header { background: var(--card); width: 100%; padding: 10px 0; text-align: center; position: sticky; top: 0; z-index: 10; box-shadow: 0 10px 15px rgba(0,0,0,0.3); }
-        .timer-container { width: 100%; height: 6px; background: #334155; margin-top: 10px; }
-        #timer-bar { height: 100%; width: 100%; background: var(--primary); transition: width 1s linear; }
+let peer, conn;
+let connections = []; 
+let isHost = false;
+let fullDictionary = [];
+let currentRound = { baseWord: "", solutions: [], found: [], timeLeft: 180, active: false };
+let timerInterval;
 
-        .container { width: 95%; max-width: 900px; padding: 20px; text-align: center; }
-        .connection-box { background: #1e293b; padding: 20px; border-radius: 15px; margin-bottom: 20px; border: 2px dashed var(--primary); }
-        
-        .letters { font-size: clamp(3rem, 10vw, 5rem); font-weight: 900; color: var(--primary); letter-spacing: 0.5rem; margin: 15px 0; text-transform: uppercase; }
-        input { background: #1e293b; border: 2px solid #475569; color: white; padding: 12px; font-size: 1.8rem; border-radius: 0.8rem; width: 80%; max-width: 400px; text-align: center; outline: none; }
-        
-        .length-section { margin-top: 30px; text-align: left; }
-        .length-title { font-size: 0.8rem; font-weight: bold; color: #64748b; border-bottom: 1px solid #334155; padding-bottom: 4px; margin-bottom: 12px; }
-        .word-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
-        .word-slot { background: #1e293b; padding: 8px; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 1.1rem; text-align: center; border: 1px solid #334155; white-space: nowrap; color: transparent; }
-        
-        .revealed { background: #0c4a6e; color: var(--primary) !important; border-color: var(--primary); font-weight: bold; }
-        .missed { background: #451a03; color: var(--missed) !important; border-color: var(--missed); font-style: italic; }
+const normalize = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
 
-        #game-over-panel { position: fixed; bottom: 0; left: 0; right: 0; background: #1e293b; border-top: 4px solid var(--primary); padding: 15px; display: none; justify-content: space-around; align-items: center; z-index: 100; }
-        button { background: var(--primary); color: #0f172a; border: none; padding: 12px 25px; font-weight: bold; border-radius: 6px; cursor: pointer; }
-        .share-link { color: var(--primary); cursor: pointer; text-decoration: underline; font-size: 0.9rem; }
-    </style>
-</head>
-<body>
-
-<div class="game-header">
-    <div id="timer-text" style="font-family: monospace; font-size: 1.5rem;">03:00</div>
-    <div class="timer-container"><div id="timer-bar"></div></div>
-</div>
-
-<div class="container">
-    <div id="setup-ui" class="connection-box">
-    <h2 id="status-msg">Initialisation du multijoueur...</h2>
-    
-    <div id="share-area" style="display:none; margin: 20px 0;">
-        <p style="color: #94a3b8; margin-bottom: 10px;">Partage ce lien avec tes joueurs :</p>
-        
-        <div style="display: flex; justify-content: center; gap: 10px; max-width: 500px; margin: 0 auto;">
-            <input type="text" id="game-link-input" readonly 
-                   style="font-size: 1rem; padding: 10px; width: 70%; background: #0f172a; border-radius: 6px; cursor: default;">
-            
-            <button id="copy-btn" onclick="copyGameLink()" 
-                    style="font-size: 0.9rem; padding: 10px 15px; background: #22c55e; white-space: nowrap; transition: all 0.2s;">
-                📋 Copier le lien
-            </button>
-        </div>
-    </div>
-    
-    <button id="start-btn" style="display:none; background: var(--primary); margin-top: 15px;" onclick="setupNewRound()">
-        🚀 LANCER LA PARTIE
-    </button>
-</div>
-
-    <div id="game-ui" style="display:none">
-        <div class="letters" id="scrambled-display">-------</div>
-        <input type="text" id="user-input" placeholder="Trouvez un mot..." autocomplete="off">
-        <div id="score-info" style="color: #94a3b8; margin: 15px 0;">Mots : 0 / 0</div>
-        <div id="main-container"></div>
-    </div>
-</div>
-
-<div id="game-over-panel">
-    <div id="final-res" style="font-weight: bold;">Score : 0 / 0</div>
-    <button id="restart-btn" style="display:none" onclick="setupNewRound()">REJOUER</button>
-</div>
-
-<script>
-    let peer, conn;
-    let connections = []; // Pour le host : liste des joueurs connectés
-    let isHost = false;
-    let fullDictionary = [];
-    let currentRound = { baseWord: "", solutions: [], found: [], timeLeft: 180, active: false };
-    let timerInterval;
-
-    const normalize = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
-
-    // 1. INITIALISATION MULTIJOUEUR
-    const urlParams = new URLSearchParams(window.location.search);
-    const joinId = urlParams.get('join');
-// Remplace le bloc "if (joinId) { ... } else { ... }" par celui-ci :
+// 1. INITIALISATION
+const urlParams = new URLSearchParams(window.location.search);
+const joinId = urlParams.get('join');
 
 if (joinId) {
-    // Mode JOUEUR
+    isHost = false;
     peer = new Peer();
     peer.on('open', (id) => {
         document.getElementById('status-msg').innerText = "Connexion au Host...";
@@ -98,208 +20,162 @@ if (joinId) {
         setupClientEvents(conn);
     });
 } else {
-    // Mode HOST
     isHost = true;
     peer = new Peer();
     peer.on('open', (id) => {
-        // Nettoyer l'URL actuelle s'il y avait d'anciens paramètres
         const baseUrl = window.location.href.split('?')[0];
         const link = baseUrl + "?join=" + id;
-
         document.getElementById('status-msg').innerText = "Tu es le Host !";
-        document.getElementById('game-link-input').value = link; // Remplir l'input
+        document.getElementById('game-link-input').value = link;
         document.getElementById('share-area').style.display = "block";
         document.getElementById('start-btn').style.display = "inline-block";
     });
 
     peer.on('connection', (c) => {
         connections.push(c);
+        
+        // --- NOUVEAU : SYNC SI PARTIE EN COURS ---
+        if (currentRound.active) {
+            c.on('open', () => {
+                c.send({ type: 'SYNC_JOIN', round: currentRound });
+            });
+        }
+
         c.on('data', (data) => {
             if (data.type === 'GUESS') handleGuess(data.word);
         });
     });
 }
 
-// AJOUTE CETTE NOUVELLE FONCTION N'IMPORTE OÙ DANS TON SCRIPT :
-function copyGameLink() {
-    const linkInput = document.getElementById('game-link-input');
-    const copyBtn = document.getElementById('copy-btn');
-
-    // On copie le texte
-    navigator.clipboard.writeText(linkInput.value).then(() => {
-        // Animation du bouton
-        copyBtn.innerText = "✅ Lien copié !";
-        copyBtn.style.background = "#38bdf8"; // Passe au bleu ciel
-        copyBtn.style.color = "#0f172a";
-
-        // Reset après 2 secondes
-        setTimeout(() => {
-            copyBtn.innerText = "📋 Copier le lien";
-            copyBtn.style.background = "#22c55e"; // Repasse au vert
-            copyBtn.style.color = "#0f172a";
-        }, 2000);
-    }).catch(err => {
-        alert("Impossible de copier le lien automatiquement. Fais-le manuellement !");
-    });
-}
-
-    // 2. LOGIQUE DE JEU
-    async function loadDict() {
+async function loadDict() {
+    try {
         const resp = await fetch('https://raw.githubusercontent.com/words/an-array-of-french-words/master/index.json');
         const words = await resp.json();
         fullDictionary = words.filter(w => w.length >= 4 && w.length <= 8).map(w => normalize(w));
-        if (isHost) document.getElementById('status-msg').innerText += " (Dico prêt)";
-    }
+    } catch(e) { console.error("Erreur dico", e); }
+}
 
-    function setupNewRound() {
-        if (!isHost) return;
-        
-        const targetLength = [6, 7, 8][Math.floor(Math.random() * 3)];
-        const base = fullDictionary.filter(w => w.length === targetLength)[Math.floor(Math.random() * 100)]; // simplifé
-        
-        const baseFreq = {};
-        for (let l of base) baseFreq[l] = (baseFreq[l] || 0) + 1;
-        const possible = Array.from(new Set(fullDictionary.filter(w => w.length >= 4 && canForm(w, baseFreq))))
-                        .sort((a,b) => a.length - b.length || a.localeCompare(b));
+// 2. LANCEMENT / REJOUER
+function setupNewRound() {
+    if (!isHost) return;
+    
+    // Reset local
+    clearInterval(timerInterval);
+    
+    const targetLength = [6, 7, 8][Math.floor(Math.random() * 3)];
+    const pool = fullDictionary.filter(w => w.length === targetLength);
+    const base = pool[Math.floor(Math.random() * pool.length)];
+    
+    const baseFreq = {};
+    for (let l of base) baseFreq[l] = (baseFreq[l] || 0) + 1;
+    const possible = Array.from(new Set(fullDictionary.filter(w => w.length >= 4 && canForm(w, baseFreq))))
+                    .sort((a,b) => a.length - b.length || a.localeCompare(b));
 
-        currentRound = { baseWord: base, solutions: possible, found: [], timeLeft: 180, active: true };
-        
-        // On envoie le début de partie à tout le monde
-        broadcast({ type: 'START', round: currentRound });
-        startHostGame();
-    }
+    currentRound = { 
+        baseWord: base, 
+        solutions: possible, 
+        found: [], 
+        timeLeft: 180, 
+        active: true 
+    };
+    
+    // On cache le panneau de fin et on lance chez tout le monde
+    broadcast({ type: 'START', round: currentRound });
+    startHostTimer();
+}
 
-    function handleGuess(word) {
-        if (!currentRound.active) return;
-        const val = normalize(word);
-        if (currentRound.solutions.includes(val) && !currentRound.found.includes(val)) {
-            currentRound.found.push(val);
-            broadcast({ type: 'UPDATE', word: val, foundCount: currentRound.found.length });
-            updateUIFound(val);
+function handleGuess(word) {
+    if (!currentRound.active) return;
+    const val = normalize(word);
+    if (currentRound.solutions.includes(val) && !currentRound.found.includes(val)) {
+        currentRound.found.push(val);
+        broadcast({ type: 'UPDATE', word: val, foundCount: currentRound.found.length });
+        
+        if (currentRound.found.length === currentRound.solutions.length) {
+            broadcast({ type: 'END', title: "PARFAIT !", allSolutions: currentRound.solutions });
         }
     }
+}
 
-    function broadcast(data) {
-        connections.forEach(c => c.send(data));
-        // S'appliquer à soi-même aussi (Host)
-        handlePeerData(data);
-    }
+function broadcast(data) {
+    connections.forEach(c => { if(c.open) c.send(data); });
+    handlePeerData(data); // Appliquer à soi-même
+}
 
-    function setupClientEvents(c) {
-        c.on('data', (data) => handlePeerData(data));
-        c.on('open', () => {
-            document.getElementById('status-msg').innerText = "Connecté ! En attente du host...";
-        });
-    }
+function setupClientEvents(c) {
+    c.on('data', (data) => handlePeerData(data));
+    c.on('open', () => {
+        document.getElementById('status-msg').innerText = "Connecté ! En attente du début...";
+    });
+}
 
-    function handlePeerData(data) {
-        if (data.type === 'START') {
-            currentRound = data.round;
-            currentRound.active = true;
-            document.getElementById('setup-ui').style.display = 'none';
-            document.getElementById('game-ui').style.display = 'block';
-            document.getElementById('game-over-panel').style.display = 'none';
-            renderGrid();
-            if(!isHost) startTimerVisual(); 
-        }
-        if (data.type === 'UPDATE') {
-            updateUIFound(data.word);
-            currentRound.found.length = data.foundCount;
-            updateScoreText();
-        }
-        if (data.type === 'END') {
-            endGame(data.title, data.allSolutions);
-        }
-    }
-
-    // -- Fonctions utilitaires identiques aux versions précédentes --
-    function canForm(word, freq) {
-        const f = {}; for (let l of word) f[l] = (f[l] || 0) + 1;
-        for (let l in f) if (!freq[l] || f[l] > freq[l]) return false;
-        return true;
-    }
-
-    function renderGrid() {
-        document.getElementById('scrambled-display').innerText = currentRound.baseWord.split('').sort(() => Math.random() - 0.5).join('');
-        const container = document.getElementById('main-container');
-        container.innerHTML = '';
-        const groups = {};
-        currentRound.solutions.forEach(w => { if(!groups[w.length]) groups[w.length] = []; groups[w.length].push(w); });
+function handlePeerData(data) {
+    if (data.type === 'START' || data.type === 'SYNC_JOIN') {
+        currentRound = data.round;
+        currentRound.active = true;
+        document.getElementById('setup-ui').style.display = 'none';
+        document.getElementById('game-ui').style.display = 'block';
+        document.getElementById('game-over-panel').style.display = 'none';
+        document.getElementById('user-input').disabled = false;
+        document.getElementById('user-input').value = "";
+        renderGrid();
         
-        Object.keys(groups).forEach(len => {
-            let html = `<div class="length-section"><div class="length-title">${len} LETTRES</div><div class="word-grid">`;
-            groups[len].forEach(w => {
-                html += `<div class="word-slot" id="word-${w}">${"_ ".repeat(w.length).trim()}</div>`;
-            });
-            html += `</div></div>`;
-            container.innerHTML += html;
-        });
+        // Afficher les mots déjà trouvés si on rejoint en cours
+        currentRound.found.forEach(w => updateUIFound(w));
+        
+        // Lancer le chrono visuel
+        startVisualTimer();
+    }
+    if (data.type === 'UPDATE') {
+        updateUIFound(data.word);
+        currentRound.found.length = data.foundCount;
         updateScoreText();
     }
-
-    function updateUIFound(word) {
-        const el = document.getElementById('word-' + word);
-        if (el) { el.innerText = word; el.classList.add('revealed'); }
+    if (data.type === 'END') {
+        showEndScreen(data.title, data.allSolutions);
     }
+}
 
-    function updateScoreText() {
-        document.getElementById('score-info').innerText = `Mots : ${currentRound.found.length} / ${currentRound.solutions.length}`;
-    }
+// 3. VISUELS ET TIMERS
+function startHostTimer() {
+    clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+        currentRound.timeLeft--;
+        if (currentRound.timeLeft <= 0) {
+            broadcast({ type: 'END', title: "TEMPS ÉCOULÉ !", allSolutions: currentRound.solutions });
+        }
+    }, 1000);
+}
 
-    function startHostGame() {
-        clearInterval(timerInterval);
-        timerInterval = setInterval(() => {
-            currentRound.timeLeft--;
-            broadcastTimer();
-            if (currentRound.timeLeft <= 0) {
-                broadcast({ type: 'END', title: "TEMPS ÉCOULÉ !", allSolutions: currentRound.solutions });
-            }
-        }, 1000);
-    }
-
-    function startTimerVisual() {
-        // Pour les clients, on décrémente juste visuellement
-        clearInterval(timerInterval);
-        timerInterval = setInterval(() => {
-            currentRound.timeLeft--;
-            updateTimerUI();
-        }, 1000);
-    }
-
-    function broadcastTimer() {
-        updateTimerUI();
-        // Optionnel : synchroniser le temps toutes les 5s pour éviter les décalages
-    }
-
-    function updateTimerUI() {
+function startVisualTimer() {
+    clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
         const mins = Math.floor(currentRound.timeLeft / 60);
         const secs = currentRound.timeLeft % 60;
         document.getElementById('timer-text').innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
         document.getElementById('timer-bar').style.width = (currentRound.timeLeft / 180 * 100) + "%";
-    }
+    }, 1000);
+}
 
-    function endGame(title, allSolutions) {
-        currentRound.active = false;
-        clearInterval(timerInterval);
-        allSolutions.forEach(w => {
-            const el = document.getElementById('word-' + w);
-            if (el && !el.classList.contains('revealed')) {
-                el.innerText = w; el.classList.add('missed');
-            }
-        });
-        document.getElementById('result-title').innerText = title;
-        document.getElementById('final-res').innerText = `Score : ${currentRound.found.length} / ${allSolutions.length}`;
-        document.getElementById('game-over-panel').style.display = 'flex';
-        if(isHost) document.getElementById('restart-btn').style.display = 'block';
-    }
+function showEndScreen(title, allSolutions) {
+    currentRound.active = false;
+    clearInterval(timerInterval);
+    document.getElementById('user-input').disabled = true;
 
-    document.getElementById('user-input').addEventListener('input', (e) => {
-        const val = normalize(e.target.value);
-        if (isHost) handleGuess(val);
-        else conn.send({ type: 'GUESS', word: val });
+    allSolutions.forEach(w => {
+        const el = document.getElementById('word-' + w);
+        if (el && !el.classList.contains('revealed')) {
+            el.innerText = w; el.classList.add('missed');
+        }
     });
 
-    loadDict();
-</script>
-</body>
-</html>
+    document.getElementById('result-title').innerText = title;
+    document.getElementById('final-res').innerText = `Score final : ${currentRound.found.length} / ${allSolutions.length}`;
+    document.getElementById('game-over-panel').style.display = 'flex';
+    
+    if(isHost) {
+        document.getElementById('restart-btn').style.display = 'block';
+    }
+}
+
+// (Le reste des fonctions utilitaires comme renderGrid, canForm, updateUIFound restent identiques)
