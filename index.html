@@ -1,3 +1,25 @@
+<div id="setup-ui" class="connection-box">
+    <h2 id="status-msg">Initialisation du multijoueur...</h2>
+    
+    <div id="share-area" style="display:none; margin: 20px 0;">
+        <p style="color: #94a3b8; margin-bottom: 10px;">Partage ce lien avec tes joueurs :</p>
+        
+        <div style="display: flex; justify-content: center; gap: 10px; max-width: 500px; margin: 0 auto;">
+            <input type="text" id="game-link-input" readonly 
+                   style="font-size: 1rem; padding: 10px; width: 70%; background: #0f172a; border-radius: 6px; cursor: default;">
+            
+            <button id="copy-btn" onclick="copyGameLink()" 
+                    style="font-size: 0.9rem; padding: 10px 15px; background: #22c55e; white-space: nowrap; transition: all 0.2s;">
+                📋 Copier le lien
+            </button>
+        </div>
+    </div>
+    
+    <button id="start-btn" style="display:none; background: var(--primary); margin-top: 15px;" onclick="setupNewRound()">
+        🚀 LANCER LA PARTIE
+    </button>
+</div>
+
 let peer, conn;
 let connections = []; 
 let isHost = false;
