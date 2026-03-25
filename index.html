@@ -321,11 +321,27 @@ peer.on('connection', (c) => {
         setTimeout(() => btn.innerText = "📋 Copier", 2000);
     }
 
-    document.getElementById('user-input').addEventListener('input', (e) => {
-        const val = normalize(e.target.value);
-        if (isHost) handleGuess(val); else if(conn) conn.send({ type: 'GUESS', word: val });
-        if (currentRound.solutions.includes(val)) e.target.value = "";
-    });
+document.getElementById('user-input').addEventListener('keydown', (e) => {
+    // On ne réagit que si l'utilisateur appuie sur la touche "Entrée"
+    if (e.key === 'Enter') {
+        const val = normalize(e.target.value.trim());
+        
+        if (val.length < 4) {
+            e.target.value = ""; // Trop court, on efface
+            return;
+        }
+
+        // Si on est le Host, on vérifie direct, sinon on envoie au Host
+        if (isHost) {
+            handleGuess(val);
+        } else if (conn && conn.open) {
+            conn.send({ type: 'GUESS', word: val });
+        }
+
+        // On vide systématiquement le champ après avoir appuyé sur Entrée
+        e.target.value = "";
+    }
+});
 
     init();
 </script>
