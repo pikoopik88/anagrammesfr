@@ -3,18 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Anagrammes Master - Multi Pro</title>
+    <title>Anagrammes Master - Mode Mystère</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        :root { --primary: #38bdf8; --bg: #0f172a; --card: #1e293b; --danger: #ef4444; --missed: #fbbf24; --success: #22c55e; }
+        :root { --primary: #38bdf8; --bg: #0f172a; --card: #1e293b; --danger: #f43f5e; --success: #10b981; --text: #f8fafc; }
         
         body { 
-            font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #f8fafc; 
-            margin: 0; display: flex; flex-direction: column; align-items: center; 
-            min-height: 100vh; padding-bottom: 140px; 
+            font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); 
+            margin: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding-bottom: 140px; 
         }
 
-        /* Header & Chrono */
         .game-header { 
             background: var(--card); width: 100%; padding: 10px 0; text-align: center; 
             position: sticky; top: 0; z-index: 10; box-shadow: 0 10px 15px rgba(0,0,0,0.3);
@@ -24,47 +22,48 @@
 
         .container { width: 95%; max-width: 900px; padding: 20px; text-align: center; }
         
-        /* Setup / Connexion */
+        /* Connexion */
         .connection-box { background: var(--card); padding: 2rem; border-radius: 1.5rem; border: 2px dashed var(--primary); margin-top: 20px; }
         .copy-group { display: flex; justify-content: center; gap: 10px; margin: 20px 0; }
-        .copy-group input { 
-            background: #0f172a; border: 1px solid #475569; color: var(--primary); 
-            padding: 10px; border-radius: 6px; width: 60%; font-size: 0.9rem; 
-        }
+        .copy-group input { background: #0f172a; border: 1px solid #475569; color: var(--primary); padding: 10px; border-radius: 6px; width: 60%; }
 
-        /* Jeu */
-        .letters { font-size: clamp(3rem, 10vw, 5rem); font-weight: 900; color: var(--primary); letter-spacing: 0.5rem; margin: 15px 0; text-transform: uppercase; text-shadow: 0 0 20px rgba(56, 189, 248, 0.4); }
+        /* Zone de Tirage */
+        .letters-row { display: flex; align-items: center; justify-content: center; gap: 15px; margin: 15px 0; }
+        .letters { 
+            font-size: clamp(2.5rem, 8vw, 4.5rem); font-weight: 900; color: var(--primary); 
+            letter-spacing: 0.5rem; text-transform: uppercase; text-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+        }
+        .btn-shuffle { 
+            background: #334155; color: white; border: none; padding: 10px; border-radius: 50%; 
+            cursor: pointer; width: 45px; height: 45px; font-size: 1.2rem; transition: transform 0.2s;
+        }
+        .btn-shuffle:hover { transform: rotate(90deg); background: #475569; }
+
         #user-input { 
             background: #1e293b; border: 2px solid #475569; color: white; padding: 12px; 
-            font-size: 1.8rem; border-radius: 0.8rem; width: 80%; max-width: 400px; 
-            outline: none; text-align: center; 
+            font-size: 1.5rem; border-radius: 0.8rem; width: 85%; max-width: 400px; text-align: center; outline: none;
         }
-        #user-input:focus { border-color: var(--primary); }
-        #user-input:disabled { opacity: 0.3; cursor: not-allowed; }
+        #user-input:focus { border-color: var(--primary); box-shadow: 0 0 10px rgba(56, 189, 248, 0.2); }
 
-        /* Grilles et Sections */
+        /* Grilles */
         .length-section { margin-top: 30px; text-align: left; }
-        .length-title { font-size: 0.9rem; font-weight: bold; color: #64748b; border-bottom: 1px solid #334155; padding-bottom: 5px; margin-bottom: 12px; }
-        .word-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+        .length-title { font-size: 0.8rem; font-weight: bold; color: #64748b; border-bottom: 1px solid #334155; padding-bottom: 5px; margin-bottom: 12px; }
+        .word-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
         .word-slot { 
-            background: #0f172a; padding: 10px; border-radius: 6px; border: 1px solid #334155;
-            font-family: 'Courier New', monospace; font-size: 1.1rem; text-align: center;
-            white-space: nowrap; color: transparent; transition: all 0.3s;
+            background: #0f172a; padding: 8px; border-radius: 5px; border: 1px solid #334155;
+            font-family: 'Courier New', monospace; font-size: 1rem; text-align: center;
+            white-space: nowrap; color: transparent; 
         }
-        
         .revealed { background: #0c4a6e; color: var(--primary) !important; border-color: var(--primary); font-weight: bold; }
-        .missed { background: #451a03; color: var(--missed) !important; border-color: var(--missed); font-style: italic; }
+        .missed { background: #451a03; color: var(--missed) !important; border-color: #fbbf24; font-style: italic; }
 
-        /* Bandeau de Fin fixe */
+        /* Footer */
         #game-over-panel { 
             position: fixed; bottom: 0; left: 0; right: 0; background: #1e293b; 
-            border-top: 4px solid var(--primary); padding: 20px; 
-            display: none; justify-content: space-around; align-items: center; z-index: 100;
+            border-top: 4px solid var(--primary); padding: 15px; display: none; 
+            justify-content: space-around; align-items: center; z-index: 100;
         }
-
-        button { padding: 12px 25px; font-weight: bold; border-radius: 8px; border: none; cursor: pointer; transition: transform 0.1s; }
-        button:active { transform: scale(0.95); }
-        .btn-primary { background: var(--primary); color: #0f172a; }
+        button.action { padding: 12px 20px; font-weight: bold; border-radius: 8px; border: none; cursor: pointer; }
         .btn-success { background: var(--success); color: white; }
     </style>
 </head>
@@ -77,403 +76,238 @@
 
 <div class="container">
     <div id="setup-ui" class="connection-box">
-        <h2 id="status-msg">Chargement du dictionnaire...</h2>
+        <h2 id="status-msg">Chargement...</h2>
         <div id="share-area" style="display:none">
-            <p>Partagez ce lien pour inviter des joueurs :</p>
             <div class="copy-group">
                 <input type="text" id="game-link-input" readonly>
-                <button class="btn-primary" id="copy-btn" onclick="copyGameLink()">📋 Copier</button>
+                <button class="btn-success" style="padding:10px" onclick="copyGameLink()">📋 Copier</button>
             </div>
-            <button class="btn-success" id="start-btn" style="display:none" onclick="setupNewRound()">🚀 LANCER LA PARTIE</button>
+            <button class="action btn-success" id="start-btn" style="display:none" onclick="setupNewRound()">🚀 LANCER LA PARTIE</button>
         </div>
     </div>
 
     <div id="game-ui" style="display:none">
-        <div class="letters" id="scrambled-display">-------</div>
-        <input type="text" id="user-input" placeholder="Tapez un mot..." autocomplete="off">
-        <div id="score-info" style="color: #94a3b8; font-weight: bold; margin: 15px 0;">Mots : 0 / 0</div>
+        <div class="letters-row">
+            <div class="letters" id="scrambled-display">-------</div>
+            <button class="btn-shuffle" onclick="shuffleVisual()" title="Mélanger les lettres">🔄</button>
+        </div>
+        <div id="mystery-badge" style="margin-bottom: 10px; font-weight: bold;"></div>
+        
+        <input type="text" id="user-input" placeholder="Mot + Entrée" autocomplete="off">
+        <div id="score-info" style="color: #64748b; margin-top: 15px;">Mots : 0 / 0</div>
         <div id="main-container"></div>
     </div>
 </div>
 
 <div id="game-over-panel">
-    <div style="text-align: left;">
-        <div id="result-title" style="font-weight: bold; color: var(--primary); font-size: 1.3rem;">TERMINÉ</div>
-        <div id="final-res">Score : 0 / 0</div>
+    <div>
+        <div id="result-title" style="font-weight: bold; color: var(--primary);">FIN</div>
+        <div id="final-res">0 / 0</div>
     </div>
-    <button id="restart-btn" class="btn-success" style="display:none" onclick="setupNewRound()">🔄 REJOUER</button>
+    <button id="restart-btn" class="action btn-success" style="display:none" onclick="setupNewRound()">🔄 NOUVELLE PARTIE</button>
 </div>
 
 <script>
     let peer, conn, connections = [], isHost = false;
     let fullDictionary = [];
-    let currentRound = { baseWord: "", solutions: [], found: [], timeLeft: 180, active: false };
+    let currentRound = { baseWord: "", solutions: [], found: [], timeLeft: 180, active: false, mystery: null };
     let timerInterval;
-    let mysteryInfo = { active: false, letter: '', index: -1 };
 
     const normalize = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
 
-    // 1. GESTION DU RÉSEAU (PEERJS)
+    async function loadDict() {
+        try {
+            const resp = await fetch('https://raw.githubusercontent.com/hbenbel/French-Dictionary/master/dictionary.json');
+            const data = await resp.json();
+            const rawWords = Object.keys(data);
+            fullDictionary = rawWords.filter(w => {
+                const word = w.trim();
+                if (word.length < 4 || word.length > 8) return false;
+                if (!/^[a-zàâçéèêëîïôûùÿñæœ-]+$/i.test(word)) return false;
+                // Filtrage basique conjugaisons
+                if (/(as|es|at|ez|ais|ait|ant|ons|ont|ent|iez)$/i.test(word) && !/(er|ir|re)$/i.test(word)) return false;
+                return true;
+            }).map(w => normalize(w));
+            fullDictionary = Array.from(new Set(fullDictionary));
+            document.getElementById('status-msg').innerText = "Dictionnaire prêt !";
+        } catch(e) { document.getElementById('status-msg').innerText = "Erreur Dico."; }
+    }
+
     const urlParams = new URLSearchParams(window.location.search);
     const joinId = urlParams.get('join');
 
     async function init() {
         await loadDict();
-        
         peer = new Peer();
-        
         peer.on('open', (id) => {
             if (joinId) {
-                isHost = false;
                 document.getElementById('status-msg').innerText = "Connexion au Host...";
                 conn = peer.connect(joinId);
                 setupClientEvents(conn);
             } else {
                 isHost = true;
-                const baseUrl = window.location.href.split('?')[0];
-                document.getElementById('game-link-input').value = baseUrl + "?join=" + id;
-                document.getElementById('status-msg').innerText = "Prêt à héberger !";
+                const link = window.location.href.split('?')[0] + "?join=" + id;
+                document.getElementById('game-link-input').value = link;
                 document.getElementById('share-area').style.display = "block";
                 document.getElementById('start-btn').style.display = "inline-block";
             }
         });
 
-        // Dans la section du Host (isHost = true)
-peer.on('connection', (c) => {
-    connections.push(c);
-    
-    // On attend que la connexion soit vraiment ouverte avant d'envoyer la synchro
-    c.on('open', () => {
-        console.log("Nouveau joueur connecté : " + c.peer);
-        if (currentRound.active) {
-            // ENVOI IMMÉDIAT de l'état actuel au nouveau venu
-            c.send({ 
-                type: 'SYNC', 
-                round: {
-                    ...currentRound,
-                    // On s'assure d'envoyer les mots déjà trouvés
-                    found: currentRound.found 
-                } 
+        if (isHost) {
+            peer.on('connection', (c) => {
+                connections.push(c);
+                c.on('open', () => { if(currentRound.active) c.send({ type: 'SYNC', round: currentRound }); });
+                c.on('data', (data) => { if(data.type === 'GUESS') handleGuess(data.word); });
             });
         }
-    });
-
-    c.on('data', (data) => {
-        if (data.type === 'GUESS') handleGuess(data.word);
-    });
-    
-    c.on('close', () => {
-        connections = connections.filter(conn => conn !== c);
-    });
-});
     }
 
     function setupClientEvents(c) {
-        c.on('data', (data) => handleIncomingData(data));
-        c.on('open', () => document.getElementById('status-msg').innerText = "Connecté ! En attente du Host...");
+        c.on('data', (d) => handleData(d));
+        c.on('open', () => document.getElementById('status-msg').innerText = "Connecté ! Attente du début...");
     }
 
-    function handleIncomingData(data) {
+    function handleData(data) {
         if (data.type === 'START' || data.type === 'SYNC') {
             currentRound = data.round;
-            mysteryInfo = currentRound.mystery;
-            currentRound.active = true;
             document.getElementById('setup-ui').style.display = 'none';
             document.getElementById('game-ui').style.display = 'block';
             document.getElementById('game-over-panel').style.display = 'none';
             document.getElementById('user-input').disabled = false;
             document.getElementById('user-input').value = "";
-            renderUI();
-            currentRound.found.forEach(w => revealWordUI(w, 'revealed'));
+            renderGrid();
+            updateDisplayLetters();
             startVisualTimer();
         }
         if (data.type === 'UPDATE') {
-            revealWordUI(data.word, 'revealed');
+            const el = document.getElementById('word-' + data.word);
+            if(el) { el.innerText = data.word; el.className = 'word-slot revealed'; }
             currentRound.found.push(data.word);
-            if (mysteryInfo.active) {
-            checkAndRevealMystery(data.word);
-        }
             updateScoreText();
+            updateDisplayLetters(); // Pour vérifier si on révèle le ?
         }
         if (data.type === 'END') {
-            showEndScreen(data.title, data.allSolutions);
+            currentRound.active = false;
+            clearInterval(timerInterval);
+            document.getElementById('user-input').disabled = true;
+            data.allSolutions.forEach(w => {
+                const el = document.getElementById('word-' + w);
+                if(el && !currentRound.found.includes(w)) { el.innerText = w; el.className = 'word-slot missed'; }
+            });
+            document.getElementById('result-title').innerText = data.title;
+            document.getElementById('final-res').innerText = `Score : ${currentRound.found.length} / ${data.allSolutions.length}`;
+            document.getElementById('game-over-panel').style.display = 'flex';
+            if(isHost) document.getElementById('restart-btn').style.display = 'block';
         }
     }
 
-    // 2. LOGIQUE DE JEU
-    async function loadDict() {
-    try {
-        document.getElementById('status-msg').innerText = "Filtrage du lexique (Infinitifs & Noms)...";
-        
-        // Utilisation d'une base de données lexicale plus précise (format JSON avec catégories)
-        // Note : Si ce lien expire, on peut utiliser un export CSV filtré de Lexique383
-        const resp = await fetch('https://raw.githubusercontent.com/hbenbel/French-Dictionary/master/dictionary.json');
-        const data = await resp.json();
-        
-        // data est ici un objet { "mot": "définition" }
-        // On ne garde que les clés (les mots)
-        const rawWords = Object.keys(data);
-
-        fullDictionary = rawWords
-            .filter(w => {
-                const word = w.trim();
-                // 1. Longueur entre 4 et 8
-                if (word.length < 4 || word.length > 8) return false;
-                
-                // 2. Exclure les noms propres (souvent avec une majuscule dans les dicos sérieux)
-                // Ou exclure les mots contenant des caractères spéciaux/espaces
-                if (!/^[a-zàâçéèêëîïôûùÿñæœ-]+$/i.test(word)) return false;
-
-                // 3. Filtrage manuel des suffixes de conjugaison les plus fréquents 
-                // pour nettoyer les restes si le dico est trop large
-                const conjugations = /(as|es|at|ez|ais|ait|ant|ons|ont|ent|iez)$/i;
-                // On garde les infinitifs (er, ir, re) mais on dégage le reste
-                if (conjugations.test(word) && !/(er|ir|re)$/i.test(word)) return false;
-
-                return true;
-            })
-            .map(w => normalize(w));
-
-        // Supprimer les doublons après normalisation
-        fullDictionary = Array.from(new Set(fullDictionary));
-
-        document.getElementById('status-msg').innerText = isHost ? "Prêt à héberger !" : "Connecté !";
-    } catch (e) {
-        document.getElementById('status-msg').innerText = "Erreur de chargement du dictionnaire.";
-        console.error(e);
-    }
-}
-
     function setupNewRound() {
-       if (!isHost) return;
-    
-    // ... (Code de sélection du mot de base et des solutions existant) ...
-    const targetLength = [6, 7, 8][Math.floor(Math.random() * 3)];
-    const pool = fullDictionary.filter(w => w.length === targetLength);
-    const base = pool[Math.floor(Math.random() * pool.length)];
-    
-    // Calcul de la lettre mystère
-    const baseFreq = {};
-    for (let l of base) baseFreq[l] = (baseFreq[l] || 0) + 1;
-    const possible = Array.from(new Set(fullDictionary.filter(w => w.length >= 4 && canForm(w, baseFreq))))
-                    .sort((a,b) => a.length - b.length || a.localeCompare(b));
+        if (!isHost) return;
+        const targetLength = [6, 7, 8][Math.floor(Math.random() * 3)];
+        const pool = fullDictionary.filter(w => w.length === targetLength);
+        const base = pool[Math.floor(Math.random() * pool.length)];
+        
+        const f = {}; for(let l of base) f[l] = (f[l]||0)+1;
+        const possible = Array.from(new Set(fullDictionary.filter(w => w.length>=4 && canForm(w, f))))
+                        .sort((a,b) => a.length - b.length || a.localeCompare(b));
 
-    // Initialisation du mode Mystère
-    mysteryInfo = { active: false, letter: '', index: -1 };
-    if (possible.length <= (base.length * 2)) {
-        const idx = Math.floor(Math.random() * base.length);
-        mysteryInfo = { active: true, letter: base[idx], index: idx };
+        let mystery = { active: false };
+        if (possible.length <= (base.length * 2)) {
+            const idx = Math.floor(Math.random() * base.length);
+            mystery = { active: true, letter: base[idx], index: idx };
+        }
+
+        currentRound = { baseWord: base, solutions: possible, found: [], timeLeft: 180, active: true, mystery: mystery };
+        broadcast({ type: 'START', round: currentRound });
+        startHostTimer();
     }
-
-    currentRound = { baseWord: base, solutions: possible, found: [], timeLeft: 180, active: true, mystery: mysteryInfo };
-    broadcast({ type: 'START', round: currentRound });
-    startHostLogic();
-}
 
     function handleGuess(word) {
+        if (!currentRound.active) return;
         const val = normalize(word);
-        if (currentRound.active && currentRound.solutions.includes(val) && !currentRound.found.includes(val)) {
-            currentRound.found.push(val);
-            broadcast({ type: 'UPDATE', word: val, foundCount: currentRound.found.length });
+        if (currentRound.solutions.includes(val) && !currentRound.found.includes(val)) {
+            broadcast({ type: 'UPDATE', word: val });
             if (currentRound.found.length === currentRound.solutions.length) {
                 broadcast({ type: 'END', title: "VICTOIRE !", allSolutions: currentRound.solutions });
             }
         }
     }
 
-    function broadcast(data) {
-        connections.forEach(c => { if(c.open) c.send(data); });
-        handleIncomingData(data);
-    }
-
-    function renderUI() {
-    // 1. Préparation du tirage affiché
-    let displayLetters = currentRound.baseWord.split('');
-    const nbSolutions = currentRound.solutions.length;
-    const nbLettres = currentRound.baseWord.length;
-    let isMysteryMode = false;
-
-    // 2. Condition de la Lettre Mystère (inférieur ou égal au double des lettres)
-    if (nbSolutions <= (nbLettres * 2)) {
-        isMysteryMode = true;
-        const randomIndex = Math.floor(Math.random() * displayLetters.length);
-        displayLetters[randomIndex] = "?"; // On cache une lettre
-    }
-
-    // Mélange visuel
-    const shuffled = displayLetters.sort(() => Math.random() - 0.5).join('');
-    document.getElementById('scrambled-display').innerText = shuffled;
-    
-    // Ajout d'un petit badge visuel si mode mystère
-    if (isMysteryMode) {
-        document.getElementById('scrambled-display').innerHTML += 
-            `<div style="font-size: 1rem; color: var(--danger); margin-top: -10px;">⚠️ LETTRE MYSTÈRE DÉTECTÉE</div>`;
-    }
+    function updateDisplayLetters() {
+        const mystery = currentRound.mystery;
+        let letters = currentRound.baseWord.split('');
+        const badge = document.getElementById('mystery-badge');
         
-    // Si mode mystère et pas encore résolu par un mot trouvé
-    if (mysteryInfo.active) {
-        // On vérifie si un des mots déjà trouvés utilise la lettre mystère
-        const solved = currentRound.found.some(w => isUsingMysteryLetter(w));
-        if (!solved) {
-            displayLetters[mysteryInfo.index] = "?";
+        if (mystery && mystery.active) {
+            const isSolved = currentRound.found.some(w => w.includes(mystery.letter));
+            if (!isSolved) {
+                letters[mystery.index] = "?";
+                badge.innerHTML = `<span style="color:var(--danger)">⚠️ MODE MYSTÈRE : Trouvez une lettre !</span>`;
+            } else {
+                badge.innerHTML = `<span style="color:var(--success)">✅ MYSTÈRE RÉSOLU : C'était le ${mystery.letter}</span>`;
+            }
+        } else {
+            badge.innerHTML = "";
         }
+        currentDisplay = letters; 
+        shuffleVisual();
     }
 
-    const shuffled = displayLetters.sort(() => Math.random() - 0.5).join('');
-    const displayEl = document.getElementById('scrambled-display');
-    displayEl.innerText = shuffled;
-    
-    if (mysteryInfo.active && displayLetters.includes("?")) {
-        displayEl.innerHTML += `<div id="mystery-badge" style="font-size: 0.9rem; color: var(--danger); margin-top: -5px;">⚠️ LETTRE MYSTÈRE</div>`;
-    }    
+    let currentDisplay = [];
+    function shuffleVisual() {
+        const shuffled = [...currentDisplay].sort(() => Math.random() - 0.5).join(' ');
+        document.getElementById('scrambled-display').innerText = shuffled;
+    }
 
-    // 3. Génération de la grille (le reste ne change pas)
-    const container = document.getElementById('main-container');
-    container.innerHTML = '';
-    
-    const groups = {};
-    currentRound.solutions.forEach(w => {
-        if(!groups[w.length]) groups[w.length] = [];
-        groups[w.length].push(w);
-    });
-
-    Object.keys(groups).forEach(len => {
-        const sec = document.createElement('div');
-        sec.className = 'length-section';
-        sec.innerHTML = `<div class="length-title">${len} LETTRES</div>`;
-        const grid = document.createElement('div');
-        grid.className = 'word-grid';
-        groups[len].forEach(w => {
-            const slot = document.createElement('div');
-            slot.className = 'word-slot';
-            slot.id = 'word-' + w;
-            slot.innerText = "_ ".repeat(w.length).trim();
-            grid.appendChild(slot);
-        });
-        sec.appendChild(grid);
-        container.appendChild(sec);
-    });
-    updateScoreText();
-}
+    function renderGrid() {
+        const container = document.getElementById('main-container');
+        container.innerHTML = '';
+        const groups = {};
+        currentRound.solutions.forEach(w => { if(!groups[w.length]) groups[w.length]=[]; groups[w.length].push(w); });
         Object.keys(groups).forEach(len => {
-            const sec = document.createElement('div');
-            sec.className = 'length-section';
-            sec.innerHTML = `<div class="length-title">${len} LETTRES</div>`;
-            const grid = document.createElement('div');
-            grid.className = 'word-grid';
-            groups[len].forEach(w => {
-                const slot = document.createElement('div');
-                slot.className = 'word-slot';
-                slot.id = 'word-' + w;
-                slot.innerText = "_ ".repeat(w.length).trim();
-                grid.appendChild(slot);
-            });
-            sec.appendChild(grid);
-            container.appendChild(sec);
+            let html = `<div class="length-section"><div class="length-title">${len} LETTRES</div><div class="word-grid">`;
+            groups[len].forEach(w => html += `<div class="word-slot" id="word-${w}">${"_ ".repeat(w.length).trim()}</div>`);
+            container.innerHTML += html + `</div></div>`;
         });
         updateScoreText();
     }
 
-    function isUsingMysteryLetter(foundWord) {
-    // Cette fonction est simplifiée : si le mot contient la lettre mystère, 
-    // on considère qu'on l'a trouvée (suffisant pour le gameplay)
-    return foundWord.includes(mysteryInfo.letter);
-    }
-
-    function checkAndRevealMystery(newWord) {
-    if (isUsingMysteryLetter(newWord)) {
-        // On rafraîchit juste l'affichage des lettres en haut
-        renderLettersOnly();
-        // Optionnel : petit effet visuel
-        const badge = document.getElementById('mystery-badge');
-        if (badge) badge.innerText = "✅ LETTRE RÉVÉLÉE : " + mysteryInfo.letter;
-    }
-    }
-
-    function renderLettersOnly() {
-        let displayLetters = currentRound.baseWord.split('');
-        // Si on appelle cette fonction après une découverte, displayLetters sera complet
-        document.getElementById('scrambled-display').innerText = displayLetters.sort(() => Math.random() - 0.5).join('');
-    }
-
-    function revealWordUI(word, className) {
-        const el = document.getElementById('word-' + word);
-        if (el) { el.innerText = word; el.className = 'word-slot ' + className; }
-    }
-
-    function startHostLogic() {
+    function startHostTimer() {
         clearInterval(timerInterval);
         timerInterval = setInterval(() => {
             currentRound.timeLeft--;
-            if (currentRound.timeLeft <= 0) {
-                broadcast({ type: 'END', title: "TEMPS ÉCOULÉ !", allSolutions: currentRound.solutions });
-            }
+            if (currentRound.timeLeft <= 0) broadcast({ type: 'END', title: "TEMPS ÉCOULÉ !", allSolutions: currentRound.solutions });
         }, 1000);
     }
 
     function startVisualTimer() {
         const bar = document.getElementById('timer-bar');
         const txt = document.getElementById('timer-text');
-        const localInt = setInterval(() => {
-            if (!currentRound.active) { clearInterval(localInt); return; }
+        const intv = setInterval(() => {
+            if(!currentRound.active) { clearInterval(intv); return; }
             const mins = Math.floor(currentRound.timeLeft / 60);
             const secs = currentRound.timeLeft % 60;
             txt.innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
             bar.style.width = (currentRound.timeLeft / 180 * 100) + "%";
-            bar.style.background = currentRound.timeLeft < 30 ? "var(--danger)" : "var(--primary)";
         }, 1000);
     }
 
-    function showEndScreen(title, allSolutions) {
-        currentRound.active = false;
-        document.getElementById('user-input').disabled = true;
-        allSolutions.forEach(w => { if(!currentRound.found.includes(w)) revealWordUI(w, 'missed'); });
-        document.getElementById('result-title').innerText = title;
-        document.getElementById('final-res').innerText = `Score : ${currentRound.found.length} / ${allSolutions.length}`;
-        document.getElementById('game-over-panel').style.display = 'flex';
-        if(isHost) document.getElementById('restart-btn').style.display = 'block';
-    }
-
-    // 3. UTILITAIRES
-    function canForm(word, freq) {
-        const f = {}; for (let l of word) f[l] = (f[l] || 0) + 1;
-        for (let l in f) if (!freq[l] || f[l] > freq[l]) return false;
+    function broadcast(d) { connections.forEach(c => {if(c.open) c.send(d);}); handleData(d); }
+    function canForm(w, f) {
+        const wf = {}; for(let l of w) wf[l] = (wf[l]||0)+1;
+        for(let l in wf) if(!f[l] || wf[l]>f[l]) return false;
         return true;
     }
+    function updateScoreText() { document.getElementById('score-info').innerText = `Mots : ${currentRound.found.length} / ${currentRound.solutions.length}`; }
+    function copyGameLink() { navigator.clipboard.writeText(document.getElementById('game-link-input').value); }
 
-    function updateScoreText() {
-        document.getElementById('score-info').innerText = `Mots : ${currentRound.found.length} / ${currentRound.solutions.length}`;
-    }
-
-    function copyGameLink() {
-        const input = document.getElementById('game-link-input');
-        navigator.clipboard.writeText(input.value);
-        const btn = document.getElementById('copy-btn');
-        btn.innerText = "✅ Copié !";
-        setTimeout(() => btn.innerText = "📋 Copier", 2000);
-    }
-
-document.getElementById('user-input').addEventListener('keydown', (e) => {
-    // On ne réagit que si l'utilisateur appuie sur la touche "Entrée"
-    if (e.key === 'Enter') {
-        const val = normalize(e.target.value.trim());
-        
-        if (val.length < 4) {
-            e.target.value = ""; // Trop court, on efface
-            return;
+    document.getElementById('user-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            const val = e.target.value.trim();
+            if(isHost) handleGuess(val); else if(conn) conn.send({ type: 'GUESS', word: val });
+            e.target.value = "";
         }
-
-        // Si on est le Host, on vérifie direct, sinon on envoie au Host
-        if (isHost) {
-            handleGuess(val);
-        } else if (conn && conn.open) {
-            conn.send({ type: 'GUESS', word: val });
-        }
-
-        // On vide systématiquement le champ après avoir appuyé sur Entrée
-        e.target.value = "";
-    }
-});
+    });
 
     init();
 </script>
