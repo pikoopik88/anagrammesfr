@@ -199,13 +199,38 @@ async function loadDict() {
     }
     });
 
-        if (isHost) {
-            peer.on('connection', (c) => {
-                connections.push(c);
-                c.on('open', () => { if(currentRound.active) c.send({ type: 'SYNC', round: currentRound }); });
-                c.on('data', (data) => { if(data.type === 'GUESS') handleGuess(data.word); });
+    if (isHost) {
+        peer.on('connection', (c) => {
+            connections.push(c);
+    
+            // --- C'EST ICI QUE ÇA SE JOUE ---
+            // On attend que le canal de données soit "OPEN" avant d'envoyer quoi que ce soit
+            c.on('open', () => {
+                console.log("Un joueur a rejoint le salon :", c.peer);
+                
+                // Si une partie est déjà lancée ou en cours
+                if (currentRound.active) {
+                    console.log("Envoi de la partie en cours au nouveau joueur...");
+                    c.send({ 
+                        type: 'SYNC', 
+                        round: currentRound 
+                    });
+                } else {
+                    // Si la partie n'est pas lancée, on peut envoyer un petit signal
+                    // pour dire "Je suis là, j'attends que le Host clique sur Start"
+                    c.send({ type: 'WAITING_FOR_START' });
+                }
             });
-        }
+    
+            c.on('data', (data) => { 
+                if(data.type === 'GUESS') handleGuess(data.word); 
+            });
+            
+            c.on('close', () => {
+                connections = connections.filter(conn => conn !== c);
+            });
+        });
+    }
     }
 
     function setupClientEvents(c) {
