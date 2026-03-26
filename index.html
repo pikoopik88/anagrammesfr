@@ -115,23 +115,39 @@
 
     const normalize = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
 
-    async function loadDict() {
-        try {
-            const resp = await fetch('https://raw.githubusercontent.com/hbenbel/French-Dictionary/master/dictionary.json');
-            const data = await resp.json();
-            const rawWords = Object.keys(data);
-            fullDictionary = rawWords.filter(w => {
-                const word = w.trim();
-                if (word.length < 4 || word.length > 8) return false;
-                if (!/^[a-zàâçéèêëîïôûùÿñæœ-]+$/i.test(word)) return false;
-                // Filtrage basique conjugaisons
-                if (/(as|es|at|ez|ais|ait|ant|ons|ont|ent|iez)$/i.test(word) && !/(er|ir|re)$/i.test(word)) return false;
-                return true;
-            }).map(w => normalize(w));
-            fullDictionary = Array.from(new Set(fullDictionary));
-            document.getElementById('status-msg').innerText = "Dictionnaire prêt !";
-        } catch(e) { document.getElementById('status-msg').innerText = "Erreur Dico."; }
+async function loadDict() {
+    const status = document.getElementById('status-msg');
+    status.innerText = "Chargement du dictionnaire...";
+
+    try {
+        // Tentative sur un dépôt GitHub plus stable et compressé
+        const response = await fetch('https://raw.githubusercontent.com/Anis-H/French-Dictionary-JSON/master/dictionary.json');
+        
+        if (!response.ok) throw new Error('Serveur injoignable');
+        
+        const data = await response.json();
+        const rawWords = Array.isArray(data) ? data : Object.keys(data);
+
+        fullDictionary = rawWords.filter(w => {
+            const word = w.trim();
+            if (word.length < 4 || word.length > 8) return false;
+            if (!/^[a-zA-Zàâçéèêëîïôûùÿñæœ-]+$/i.test(word)) return false;
+            // Filtre léger pour éviter les conjugaisons trop lourdes
+            if (/(as|es|at|ez|ais|ait|ant|ons|ont|ent|iez)$/i.test(word) && !/(er|ir|re)$/i.test(word)) return false;
+            return true;
+        }).map(w => normalize(w));
+
+        fullDictionary = Array.from(new Set(fullDictionary));
+        status.innerText = isHost ? "Prêt à héberger !" : "Connecté !";
+        
+    } catch (e) {
+        console.warn("Dico externe échoué, passage au mode secours local.");
+        // Liste de secours (quelques mots pour que le jeu démarre quand même)
+        const backupWords = ["MAISON", "MANGER", "BATEAU", "JOUEUR", "PARTIE", "AVIONS", "PLAGE", "VALISE", "ARBRE", "FRANCE", "MASTER", "ANAGRAMME", "BONJOUR", "SOLEIL", "ENTREE"];
+        fullDictionary = backupWords.map(w => normalize(w));
+        status.innerText = "Mode Secours Activé (Dico limité)";
     }
+}
 
     const urlParams = new URLSearchParams(window.location.search);
     const joinId = urlParams.get('join');
