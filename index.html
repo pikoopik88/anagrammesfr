@@ -172,66 +172,49 @@ async function loadDict() {
     const urlParams = new URLSearchParams(window.location.search);
     const joinId = urlParams.get('join');
 
-    async function init() {
-        await loadDict();
-        peer = new Peer({
-    config: {
-        'iceServers': [
-            { url: 'stun:stun.l.google.com:19302' },
-            { url: 'stun:stun1.l.google.com:19302' },
-            { url: 'stun:stun2.l.google.com:19302' },
-        ]
-    }
-});
-    peer.on('open', (id) => {
-    if (joinId) {
-        document.getElementById('status-msg').innerHTML = "Connexion au Host...<br><small>Recherche d'un passage réseau...</small>";
-        // On ajoute "reliable: true" pour stabiliser l'envoi des mots
-        conn = peer.connect(joinId, { reliable: true });
-        setupClientEvents(conn);
-    } else {
-        isHost = true;
-        const link = window.location.href.split('?')[0] + "?join=" + id;
-        document.getElementById('game-link-input').value = link;
-        document.getElementById('share-area').style.display = "block";
-        document.getElementById('start-btn').style.display = "inline-block";
-        document.getElementById('status-msg').innerText = "Prêt à héberger !";
-    }
+async function init() {
+    await loadDict();
+    
+    // Configuration avec serveurs de secours
+    peer = new Peer({
+        config: { 'iceServers': [{ url: 'stun:stun.l.google.com:19302' }] }
     });
 
-    if (isHost) {
-        peer.on('connection', (c) => {
-            connections.push(c);
-    
-            // --- C'EST ICI QUE ÇA SE JOUE ---
-            // On attend que le canal de données soit "OPEN" avant d'envoyer quoi que ce soit
-            c.on('open', () => {
-                console.log("Un joueur a rejoint le salon :", c.peer);
-                
-                // Si une partie est déjà lancée ou en cours
-                if (currentRound.active) {
-                    console.log("Envoi de la partie en cours au nouveau joueur...");
-                    c.send({ 
-                        type: 'SYNC', 
-                        round: currentRound 
-                    });
-                } else {
-                    // Si la partie n'est pas lancée, on peut envoyer un petit signal
-                    // pour dire "Je suis là, j'attends que le Host clique sur Start"
-                    c.send({ type: 'WAITING_FOR_START' });
-                }
-            });
-    
-            c.on('data', (data) => { 
-                if(data.type === 'GUESS') handleGuess(data.word); 
-            });
-            
-            c.on('close', () => {
-                connections = connections.filter(conn => conn !== c);
-            });
+    peer.on('open', (id) => {
+        if (joinId) {
+            statusMsg("Connexion au Host...");
+            conn = peer.connect(joinId, { reliable: true });
+            setupClientEvents(conn);
+        } else {
+            isHost = true;
+            const link = window.location.href.split('?')[0] + "?join=" + id;
+            document.getElementById('game-link-input').value = link;
+            document.getElementById('share-area').style.display = "block";
+            document.getElementById('start-btn').style.display = "inline-block";
+            statusMsg("Prêt à héberger !");
+        }
+    });
+
+    // --- LOGIQUE HOST : ACCUEIL DES JOUEURS ---
+    peer.on('connection', (c) => {
+        console.log("Nouveau joueur détecté :", c.peer);
+        connections.push(c);
+
+        c.on('open', () => {
+            console.log("Canal de données ouvert avec :", c.peer);
+            // On envoie TOUJOURS un signal au nouveau
+            if (currentRound && currentRound.active) {
+                c.send({ type: 'SYNC', round: currentRound });
+            } else {
+                c.send({ type: 'CONNECTED_SUCCESS' });
+            }
         });
-    }
-    }
+
+        c.on('data', (data) => {
+            if (data.type === 'GUESS') handleGuess(data.word);
+        });
+    });
+}
 
     function setupClientEvents(c) {
         c.on('data', (d) => handleData(d));
@@ -239,9 +222,15 @@ async function loadDict() {
     }
 
     function handleData(data) {
+        console.log("Message reçu :", data.type);
         if (data.type === 'WAITING_FOR_START') {
             document.getElementById('status-msg').innerHTML = "✅ Connecté au Host !<br>Le Host va bientôt lancer la partie...";
-}
+        }
+        if (data.type === 'CONNECTED_SUCCESS') {
+        statusMsg("✅ Connecté !<br>Attente du lancement par le Host...");
+        return;
+        }
+
         if (data.type === 'START' || data.type === 'SYNC') {
             currentRound = data.round;
             document.getElementById('setup-ui').style.display = 'none';
@@ -252,6 +241,7 @@ async function loadDict() {
             renderGrid();
             updateDisplayLetters();
             startVisualTimer();
+            statusMsg("Partie en cours !");
         }
         if (data.type === 'UPDATE') {
             const el = document.getElementById('word-' + data.word);
@@ -273,6 +263,10 @@ async function loadDict() {
             document.getElementById('game-over-panel').style.display = 'flex';
             if(isHost) document.getElementById('restart-btn').style.display = 'block';
         }
+    }
+    
+    function statusMsg(txt) {
+    document.getElementById('status-msg').innerHTML = txt;
     }
 
     function setupNewRound() {
