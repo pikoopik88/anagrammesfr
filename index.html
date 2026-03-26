@@ -109,6 +109,7 @@
     let fullDictionary = [];
     let currentRound = { baseWord: "", solutions: [], found: [], timeLeft: 180, active: false };
     let timerInterval;
+    let mysteryInfo = { active: false, letter: '', index: -1 };
 
     const normalize = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
 
@@ -175,6 +176,7 @@ peer.on('connection', (c) => {
     function handleIncomingData(data) {
         if (data.type === 'START' || data.type === 'SYNC') {
             currentRound = data.round;
+            mysteryInfo = currentRound.mystery;
             currentRound.active = true;
             document.getElementById('setup-ui').style.display = 'none';
             document.getElementById('game-ui').style.display = 'block';
@@ -188,6 +190,9 @@ peer.on('connection', (c) => {
         if (data.type === 'UPDATE') {
             revealWordUI(data.word, 'revealed');
             currentRound.found.push(data.word);
+            if (mysteryInfo.active) {
+            checkAndRevealMystery(data.word);
+        }
             updateScoreText();
         }
         if (data.type === 'END') {
@@ -197,26 +202,73 @@ peer.on('connection', (c) => {
 
     // 2. LOGIQUE DE JEU
     async function loadDict() {
-        const resp = await fetch('https://raw.githubusercontent.com/words/an-array-of-french-words/master/index.json');
-        const words = await resp.json();
-        fullDictionary = words.filter(w => w.length >= 4 && w.length <= 8).map(w => normalize(w));
+    try {
+        document.getElementById('status-msg').innerText = "Filtrage du lexique (Infinitifs & Noms)...";
+        
+        // Utilisation d'une base de données lexicale plus précise (format JSON avec catégories)
+        // Note : Si ce lien expire, on peut utiliser un export CSV filtré de Lexique383
+        const resp = await fetch('https://raw.githubusercontent.com/hbenbel/French-Dictionary/master/dictionary.json');
+        const data = await resp.json();
+        
+        // data est ici un objet { "mot": "définition" }
+        // On ne garde que les clés (les mots)
+        const rawWords = Object.keys(data);
+
+        fullDictionary = rawWords
+            .filter(w => {
+                const word = w.trim();
+                // 1. Longueur entre 4 et 8
+                if (word.length < 4 || word.length > 8) return false;
+                
+                // 2. Exclure les noms propres (souvent avec une majuscule dans les dicos sérieux)
+                // Ou exclure les mots contenant des caractères spéciaux/espaces
+                if (!/^[a-zàâçéèêëîïôûùÿñæœ-]+$/i.test(word)) return false;
+
+                // 3. Filtrage manuel des suffixes de conjugaison les plus fréquents 
+                // pour nettoyer les restes si le dico est trop large
+                const conjugations = /(as|es|at|ez|ais|ait|ant|ons|ont|ent|iez)$/i;
+                // On garde les infinitifs (er, ir, re) mais on dégage le reste
+                if (conjugations.test(word) && !/(er|ir|re)$/i.test(word)) return false;
+
+                return true;
+            })
+            .map(w => normalize(w));
+
+        // Supprimer les doublons après normalisation
+        fullDictionary = Array.from(new Set(fullDictionary));
+
+        document.getElementById('status-msg').innerText = isHost ? "Prêt à héberger !" : "Connecté !";
+    } catch (e) {
+        document.getElementById('status-msg').innerText = "Erreur de chargement du dictionnaire.";
+        console.error(e);
     }
+}
 
     function setupNewRound() {
-        if (!isHost) return;
-        const targetLength = [6, 7, 8][Math.floor(Math.random() * 3)];
-        const pool = fullDictionary.filter(w => w.length === targetLength);
-        const base = pool[Math.floor(Math.random() * pool.length)];
-        const baseFreq = {};
-        for (let l of base) baseFreq[l] = (baseFreq[l] || 0) + 1;
-        
-        const possible = Array.from(new Set(fullDictionary.filter(w => w.length >= 4 && canForm(w, baseFreq))))
-                        .sort((a,b) => a.length - b.length || a.localeCompare(b));
+       if (!isHost) return;
+    
+    // ... (Code de sélection du mot de base et des solutions existant) ...
+    const targetLength = [6, 7, 8][Math.floor(Math.random() * 3)];
+    const pool = fullDictionary.filter(w => w.length === targetLength);
+    const base = pool[Math.floor(Math.random() * pool.length)];
+    
+    // Calcul de la lettre mystère
+    const baseFreq = {};
+    for (let l of base) baseFreq[l] = (baseFreq[l] || 0) + 1;
+    const possible = Array.from(new Set(fullDictionary.filter(w => w.length >= 4 && canForm(w, baseFreq))))
+                    .sort((a,b) => a.length - b.length || a.localeCompare(b));
 
-        currentRound = { baseWord: base, solutions: possible, found: [], timeLeft: 180, active: true };
-        broadcast({ type: 'START', round: currentRound });
-        startHostLogic();
+    // Initialisation du mode Mystère
+    mysteryInfo = { active: false, letter: '', index: -1 };
+    if (possible.length <= (base.length * 2)) {
+        const idx = Math.floor(Math.random() * base.length);
+        mysteryInfo = { active: true, letter: base[idx], index: idx };
     }
+
+    currentRound = { baseWord: base, solutions: possible, found: [], timeLeft: 180, active: true, mystery: mysteryInfo };
+    broadcast({ type: 'START', round: currentRound });
+    startHostLogic();
+}
 
     function handleGuess(word) {
         const val = normalize(word);
@@ -235,16 +287,74 @@ peer.on('connection', (c) => {
     }
 
     function renderUI() {
-        document.getElementById('scrambled-display').innerText = currentRound.baseWord.split('').sort(() => Math.random() - 0.5).join('');
-        const container = document.getElementById('main-container');
-        container.innerHTML = '';
-        
-        const groups = {};
-        currentRound.solutions.forEach(w => {
-            if(!groups[w.length]) groups[w.length] = [];
-            groups[w.length].push(w);
-        });
+    // 1. Préparation du tirage affiché
+    let displayLetters = currentRound.baseWord.split('');
+    const nbSolutions = currentRound.solutions.length;
+    const nbLettres = currentRound.baseWord.length;
+    let isMysteryMode = false;
 
+    // 2. Condition de la Lettre Mystère (inférieur ou égal au double des lettres)
+    if (nbSolutions <= (nbLettres * 2)) {
+        isMysteryMode = true;
+        const randomIndex = Math.floor(Math.random() * displayLetters.length);
+        displayLetters[randomIndex] = "?"; // On cache une lettre
+    }
+
+    // Mélange visuel
+    const shuffled = displayLetters.sort(() => Math.random() - 0.5).join('');
+    document.getElementById('scrambled-display').innerText = shuffled;
+    
+    // Ajout d'un petit badge visuel si mode mystère
+    if (isMysteryMode) {
+        document.getElementById('scrambled-display').innerHTML += 
+            `<div style="font-size: 1rem; color: var(--danger); margin-top: -10px;">⚠️ LETTRE MYSTÈRE DÉTECTÉE</div>`;
+    }
+        
+    // Si mode mystère et pas encore résolu par un mot trouvé
+    if (mysteryInfo.active) {
+        // On vérifie si un des mots déjà trouvés utilise la lettre mystère
+        const solved = currentRound.found.some(w => isUsingMysteryLetter(w));
+        if (!solved) {
+            displayLetters[mysteryInfo.index] = "?";
+        }
+    }
+
+    const shuffled = displayLetters.sort(() => Math.random() - 0.5).join('');
+    const displayEl = document.getElementById('scrambled-display');
+    displayEl.innerText = shuffled;
+    
+    if (mysteryInfo.active && displayLetters.includes("?")) {
+        displayEl.innerHTML += `<div id="mystery-badge" style="font-size: 0.9rem; color: var(--danger); margin-top: -5px;">⚠️ LETTRE MYSTÈRE</div>`;
+    }    
+
+    // 3. Génération de la grille (le reste ne change pas)
+    const container = document.getElementById('main-container');
+    container.innerHTML = '';
+    
+    const groups = {};
+    currentRound.solutions.forEach(w => {
+        if(!groups[w.length]) groups[w.length] = [];
+        groups[w.length].push(w);
+    });
+
+    Object.keys(groups).forEach(len => {
+        const sec = document.createElement('div');
+        sec.className = 'length-section';
+        sec.innerHTML = `<div class="length-title">${len} LETTRES</div>`;
+        const grid = document.createElement('div');
+        grid.className = 'word-grid';
+        groups[len].forEach(w => {
+            const slot = document.createElement('div');
+            slot.className = 'word-slot';
+            slot.id = 'word-' + w;
+            slot.innerText = "_ ".repeat(w.length).trim();
+            grid.appendChild(slot);
+        });
+        sec.appendChild(grid);
+        container.appendChild(sec);
+    });
+    updateScoreText();
+}
         Object.keys(groups).forEach(len => {
             const sec = document.createElement('div');
             sec.className = 'length-section';
@@ -262,6 +372,28 @@ peer.on('connection', (c) => {
             container.appendChild(sec);
         });
         updateScoreText();
+    }
+
+    function isUsingMysteryLetter(foundWord) {
+    // Cette fonction est simplifiée : si le mot contient la lettre mystère, 
+    // on considère qu'on l'a trouvée (suffisant pour le gameplay)
+    return foundWord.includes(mysteryInfo.letter);
+    }
+
+    function checkAndRevealMystery(newWord) {
+    if (isUsingMysteryLetter(newWord)) {
+        // On rafraîchit juste l'affichage des lettres en haut
+        renderLettersOnly();
+        // Optionnel : petit effet visuel
+        const badge = document.getElementById('mystery-badge');
+        if (badge) badge.innerText = "✅ LETTRE RÉVÉLÉE : " + mysteryInfo.letter;
+    }
+    }
+
+    function renderLettersOnly() {
+        let displayLetters = currentRound.baseWord.split('');
+        // Si on appelle cette fonction après une découverte, displayLetters sera complet
+        document.getElementById('scrambled-display').innerText = displayLetters.sort(() => Math.random() - 0.5).join('');
     }
 
     function revealWordUI(word, className) {
