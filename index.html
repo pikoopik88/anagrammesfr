@@ -239,6 +239,9 @@ async function loadDict() {
     }
 
     function handleData(data) {
+        if (data.type === 'WAITING_FOR_START') {
+            document.getElementById('status-msg').innerHTML = "✅ Connecté au Host !<br>Le Host va bientôt lancer la partie...";
+}
         if (data.type === 'START' || data.type === 'SYNC') {
             currentRound = data.round;
             document.getElementById('setup-ui').style.display = 'none';
