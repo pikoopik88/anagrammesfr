@@ -618,6 +618,7 @@ aggravée
 aggravées
 aggraver
 aggravés
+agi
 agie
 agir
 agissant
@@ -1880,6 +1881,7 @@ avouée
 avouées
 avoués
 avoyer
+axé
 axée
 axées
 axer
@@ -2203,6 +2205,7 @@ bectée
 bectées
 becter
 bedonnant
+béé
 bégayant
 bégayé
 bégayer
@@ -3765,6 +3768,7 @@ chronométrée
 chronométrées
 chronométrer
 chronométrés
+chu
 chuchotant
 chuchoté
 chuchotée
@@ -5273,6 +5277,8 @@ croûté
 croûtée
 croûter
 croyant
+cru
+crû
 crucifiant
 crucifié
 crucifiée
@@ -8449,6 +8455,7 @@ droppé
 dropper
 droppés
 drossé
+due
 dues
 dupant
 dupée
@@ -8981,6 +8988,7 @@ effuser
 éloigner
 éloignés
 élongé
+élu
 élucidant
 élucidé
 élucidée
@@ -9426,6 +9434,7 @@ empruntés
 empuanti
 empuantie
 empuantir
+ému
 émue
 émues
 émulant
@@ -10706,6 +10715,8 @@ estropiés
 étayées
 étayer
 étayés
+été
+été
 éteignant
 éteindre
 éteinte
@@ -10807,6 +10818,8 @@ estropiés
 étuvé
 étuver
 étuvés
+eue
+eue
 eues
 eues
 euphorisant
@@ -11497,6 +11510,7 @@ fidélisant
 fidélisé
 fidélisée
 fidéliser
+fié
 fiée
 fiées
 fieffé
@@ -12067,6 +12081,7 @@ fugué
 fuguée
 fuguer
 fugués
+fui
 fuir
 fuitant
 fuité
@@ -12735,6 +12750,7 @@ hachurant
 hachuré
 hachurée
 hachurés
+haï
 haïe
 haïes
 haïr
@@ -12943,6 +12959,7 @@ houspillant
 houspillé
 houspiller
 huant
+hué
 huée
 huées
 huer
@@ -14241,6 +14258,7 @@ licenciés
 liché
 lichée
 licher
+lié
 liée
 liées
 liés
@@ -14409,8 +14427,10 @@ lubrifiée
 lubrifiées
 lubrifier
 lubrifiés
+lue
 lues
 luger
+lui
 luire
 luisant
 lunché
@@ -15327,6 +15347,7 @@ moyennés
 moyer
 muant
 muché
+mué
 muée
 muées
 muer
@@ -15360,6 +15381,7 @@ murmurée
 murmurées
 murmurer
 murmurés
+mus
 musant
 musardant
 musardé
@@ -15489,6 +15511,7 @@ nécrosée
 nécrosées
 nécroser
 nécrosés
+née
 nées
 négligeant
 négligée
@@ -15507,6 +15530,7 @@ nervuré
 nervurée
 nervurées
 nervurés
+nés
 nettoyant
 nettoyée
 nettoyées
@@ -15629,8 +15653,10 @@ nuancés
 nucléarisé
 nucléarisée
 nucléariser
+nué
 nuée
 nuer
+nui
 nuisant
 nuité
 numérisant
@@ -15907,6 +15933,7 @@ ostracisées
 ostraciser
 ostracisés
 ôtant
+ôté
 ôtée
 ôtées
 ôter
@@ -15917,6 +15944,7 @@ oubliant
 oubliée
 oubliées
 oublier
+ouï
 ouïe
 ouïes
 ouïr
@@ -16912,6 +16940,7 @@ plongés
 ployant
 ployé
 ployer
+plu
 plumant
 plumé
 plumée
@@ -17682,6 +17711,7 @@ publiées
 publiés
 pucher
 puddler
+pué
 puer
 pués
 puisant
@@ -21364,6 +21394,7 @@ rudoyé
 rudoyée
 rudoyées
 rudoyés
+rué
 ruée
 ruées
 ruer
@@ -22476,6 +22507,8 @@ sucré
 sucrée
 sucrées
 sucrés
+sue
+sué
 suée
 suées
 suer
@@ -23871,6 +23904,7 @@ ulcérer
 ulcérés
 ululé
 ululer
+uni
 unie
 unies
 unifiant
@@ -23905,6 +23939,7 @@ uriné
 urinée
 uriner
 usant
+usé
 usée
 usées
 user
@@ -24336,6 +24371,7 @@ vrillés
 vrombi
 vrombir
 vrombissant
+vue
 vues
 vulcanisée
 vulcaniser
