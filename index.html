@@ -183,19 +183,21 @@ async function loadDict() {
         ]
     }
 });
-        peer.on('open', (id) => {
-            if (joinId) {
-                document.getElementById('status-msg').innerText = "Connexion au Host...";
-                conn = peer.connect(joinId);
-                setupClientEvents(conn);
-            } else {
-                isHost = true;
-                const link = window.location.href.split('?')[0] + "?join=" + id;
-                document.getElementById('game-link-input').value = link;
-                document.getElementById('share-area').style.display = "block";
-                document.getElementById('start-btn').style.display = "inline-block";
-            }
-        });
+    peer.on('open', (id) => {
+    if (joinId) {
+        document.getElementById('status-msg').innerHTML = "Connexion au Host...<br><small>Recherche d'un passage réseau...</small>";
+        // On ajoute "reliable: true" pour stabiliser l'envoi des mots
+        conn = peer.connect(joinId, { reliable: true });
+        setupClientEvents(conn);
+    } else {
+        isHost = true;
+        const link = window.location.href.split('?')[0] + "?join=" + id;
+        document.getElementById('game-link-input').value = link;
+        document.getElementById('share-area').style.display = "block";
+        document.getElementById('start-btn').style.display = "inline-block";
+        document.getElementById('status-msg').innerText = "Prêt à héberger !";
+    }
+    });
 
         if (isHost) {
             peer.on('connection', (c) => {
