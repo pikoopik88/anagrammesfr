@@ -233,6 +233,7 @@ async function init() {
 
         if (data.type === 'START' || data.type === 'SYNC') {
             currentRound = data.round;
+            if (d.serverTime) currentRound.timeLeft = d.serverTime;
             document.getElementById('setup-ui').style.display = 'none';
             document.getElementById('game-ui').style.display = 'block';
             document.getElementById('game-over-panel').style.display = 'none';
@@ -242,11 +243,26 @@ async function init() {
             updateDisplayLetters();
             startVisualTimer();
             statusMsg("Partie en cours !");
+            // On révèle les mots déjà trouvés (important pour ceux qui actualisent)
+        currentRound.found.forEach(word => {
+            revealWordUI(word, 'revealed');
+        });
+        
+        updateScoreText();
+        updateDisplayLetters();
+        
+        // On relance le timer visuel s'il n'est pas déjà actif
+        if (!timerInterval) startVisualTimer();
         }
         if (data.type === 'UPDATE') {
             const el = document.getElementById('word-' + data.word);
             if(el) { el.innerText = data.word; el.className = 'word-slot revealed'; }
+            if (data.newTime) currentRound.timeLeft = data.newTime;
+        
+        revealWordUI(data.word, 'revealed');
+        if (!currentRound.found.includes(data.word)) {
             currentRound.found.push(data.word);
+        }
             updateScoreText();
             updateDisplayLetters(); // Pour vérifier si on révèle le ?
         }
@@ -360,7 +376,12 @@ async function init() {
         }, 1000);
     }
 
-    function broadcast(d) { connections.forEach(c => {if(c.open) c.send(d);}); handleData(d); }
+    function broadcast(d) { 
+        if (currentRound.active) {
+        d.serverTime = currentRound.timeLeft;
+    }
+        connections.forEach(c => {if(c.open) c.send(d);}); handleData(d); 
+    }
     function canForm(w, f) {
         const wf = {}; for(let l of w) wf[l] = (wf[l]||0)+1;
         for(let l in wf) if(!f[l] || wf[l]>f[l]) return false;
