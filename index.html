@@ -93,7 +93,7 @@
 <script>
     let peer, conn, connections = [], isHost = false;
     let fullDictionary = [];
-    let myPseudo = "Anonyme";
+    let myPseudo = "Pikoo";
     let players = {}; // { peerId: { pseudo, scorePartie, scoreSession } }
     let currentRound = { baseWord: "", solutions: [], found: [], timeLeft: 30, active: false, mystery: null };
     let timerInterval;
@@ -106,7 +106,7 @@
     async function loadDict() {
         try {
             // REMPLACE PAR TON LIEN RAW REEL
-            const url = 'https://raw.githubusercontent.com/TON_PSEUDO/TON_DEPOT/main/lexique.txt';
+            const url = 'https://raw.githubusercontent.com/pikoopik88/anagrammesfr/refs/heads/main/lexique.txt';
             const resp = await fetch(url);
             if (!resp.ok) throw new Error();
             const text = await resp.text();
