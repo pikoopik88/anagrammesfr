@@ -125,7 +125,7 @@
     let fullDictionary = [];
     let myPseudo = "Pikoo";
     let players = {}; // { peerId: { pseudo, scorePartie, scoreSession } }
-    let currentRound = { baseWord: "", solutions: [], found: [], timeLeft: 30, active: false, mystery: null };
+    let currentRound = { baseWord: "", solutions: [], found: [], timeLeft: 90, active: false, mystery: null };
     let timerInterval;
 
     const normalize = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
@@ -242,7 +242,7 @@
             baseWord: base, 
             solutions: possible, 
             found: [], 
-            timeLeft: 30, // Temps de base
+            timeLeft: 90, // Temps de base
             active: true,
             mystery: possible.length < 12 ? { active: true, letter: base[0], index: 0 } : null 
         };
