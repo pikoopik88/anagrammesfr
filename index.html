@@ -53,7 +53,10 @@
         .btn-shuffle { background: #334155; color: white; border-radius: 50%; width: 45px; height: 45px; padding: 0; display: flex; align-items: center; justify-content: center; }
 
         /* End Screen Overlay */
-        #end-overlay { display: none; margin-top: 20px; padding: 20px; background: rgba(244, 63, 94, 0.1); border: 2px solid var(--danger); border-radius: 15px; }
+        #end-overlay { display: none; margin-bottom: 25px; padding: 25px; background: rgba(244, 63, 94, 0.15); border: 2px solid var(--danger); border-radius: 15px; }
+
+        /* Lobby Display */
+        #lobby-display { margin-top: 20px; font-size: 1.1rem; color: var(--success); font-weight: bold; min-height: 30px; }
 
         @media (max-width: 850px) {
             .game-layout { flex-direction: column; align-items: center; }
@@ -79,23 +82,26 @@
             <button id="join-btn" class="btn-success" style="display:none" onclick="joinGame()">Rejoindre la partie</button>
         </div>
 
+        <div id="lobby-display"></div>
+
         <div id="share-area" style="display:none; margin-top: 20px; padding-top: 20px; border-top: 1px solid #334155;">
-            <p style="color: var(--success); font-weight: bold;">✅ Salon créé !</p>
-            <p style="font-size: 0.9rem;">Envoie ce lien à tes amis :</p>
+            <p style="color: var(--success); font-weight: bold;">✅ Salon ouvert !</p>
+            <p style="font-size: 0.9rem;">Envoie ce lien à tes joueurs :</p>
             <input type="text" id="game-link-input" readonly style="width: 100%; font-size: 0.8rem;">
             <button onclick="copyLink()" style="margin-bottom: 15px;">📋 Copier le lien</button>
             <br>
-            <button id="start-btn" class="btn-success" style="display:none; width: 100%;" onclick="setupNewRound()">🚀 LANCER LA PARTIE</button>
+            <button id="start-btn" class="btn-success" style="display:none; width: 100%; font-size: 1.2rem;" onclick="setupNewRound()">🚀 LANCER LA PARTIE</button>
         </div>
     </div>
 
     <div id="game-layout" class="game-layout" style="display:none">
         
         <div class="main-game">
+            
             <div id="end-overlay">
-                <h2 style="color: var(--danger); margin-top: 0;">TEMPS ÉCOULÉ !</h2>
-                <button id="replay-btn" class="btn-success" style="display:none; font-size: 1.2rem;" onclick="setupNewRound()">🔄 REJOUER UNE MANCHE</button>
-                <p id="wait-host-msg" style="display:none; color: #94a3b8;">En attente de l'hôte pour rejouer...</p>
+                <h2 style="color: var(--danger); margin-top: 0; font-size: 2rem;">TEMPS ÉCOULÉ !</h2>
+                <button id="replay-btn" class="btn-success" style="display:none; font-size: 1.3rem; padding: 15px 30px;" onclick="setupNewRound()">🔄 REJOUER UNE MANCHE</button>
+                <p id="wait-host-msg" style="display:none; color: #94a3b8; font-size: 1.1rem;">En attente de l'hôte pour rejouer...</p>
             </div>
 
             <div class="letters-row">
@@ -120,33 +126,34 @@
     </div>
 </div>
 
+<div style="text-align:center; color:#475569; margin-top: 20px;"><small>v3.1</small></div>
+
 <script>
     let peer, conn, connections = [], isHost = false;
     let fullDictionary = [];
-    let myPseudo = "Pikoo";
-    let players = {}; // { peerId: { pseudo, scorePartie, scoreSession } }
-    let currentRound = { baseWord: "", solutions: [], found: [], timeLeft: 90, active: false, mystery: null };
+    let myPseudo = "Anonyme";
+    let players = {}; 
+    let currentRound = { baseWord: "", scrambled: [], solutions: [], found: [], timeLeft: 30, active: false, mystery: null };
     let timerInterval;
+    let autoShuffleInterval; // <-- NOUVEAU : Timer pour le mélange automatique
 
     const normalize = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
-    const urlParams = new URLSearchParams(window.location.search);
-    const joinId = urlParams.get('join');
+    const joinId = new URLSearchParams(window.location.search).get('join')?.trim();
 
     // --- CHARGEMENT DU DICTIONNAIRE ---
     async function loadDict() {
         try {
             // REMPLACE TON_PSEUDO ET TON_DEPOT PAR TES INFOS GITHUB
-            const url = 'https://raw.githubusercontent.com/pikoopik88/anagrammesfr/refs/heads/main/lexique.txt';
+            const url = 'https://raw.githubusercontent.com/TON_PSEUDO/TON_DEPOT/main/lexique.txt';
             const resp = await fetch(url);
             if (!resp.ok) throw new Error("Fichier introuvable");
             const text = await resp.text();
             fullDictionary = Array.from(new Set(text.split(/\r?\n/).map(line => normalize(line.split('\t')[0].trim())).filter(w => w.length >= 4 && w.length <= 8)));
             
             if(fullDictionary.length < 100) throw new Error("Dico trop petit");
-            
             setupUIReady();
         } catch (e) {
-            console.error(e);
+            console.error("Dico perso introuvable, secours activé.");
             fullDictionary = ["MAISON", "MANGER", "BATEAU", "AVION", "PLAGE", "SOLEIL", "POULET", "COURANT", "POMMIER", "VOITURE"].map(normalize);
             setupUIReady(true);
         }
@@ -156,8 +163,10 @@
         document.getElementById('status-msg').innerHTML = isFallback ? "⚠️ Dico de secours chargé" : `✅ Dico prêt (${fullDictionary.length} mots)`;
         if (joinId) {
             document.getElementById('join-btn').style.display = "inline-block";
+            document.getElementById('host-btn').style.display = "none";
         } else {
             document.getElementById('host-btn').style.display = "inline-block";
+            document.getElementById('join-btn').style.display = "none";
         }
     }
 
@@ -165,13 +174,13 @@
     function hostGame() {
         myPseudo = document.getElementById('player-pseudo').value.trim() || "Host";
         document.getElementById('host-btn').disabled = true;
-        document.getElementById('status-msg').innerText = "Création du salon...";
+        document.getElementById('status-msg').innerText = "Création du salon en cours...";
 
         peer = new Peer({ config: { 'iceServers': [{ url: 'stun:stun.l.google.com:19302' }] } });
 
         peer.on('open', (id) => {
             isHost = true;
-            players[id] = { pseudo: myPseudo, scorePartie: 0, scoreSession: 0 }; // Le host est le 1er joueur
+            players[id] = { pseudo: myPseudo, scorePartie: 0, scoreSession: 0 }; 
             
             const link = window.location.href.split('?')[0] + "?join=" + id;
             document.getElementById('game-link-input').value = link;
@@ -179,7 +188,7 @@
             document.getElementById('host-btn').style.display = "none";
             document.getElementById('share-area').style.display = "block";
             document.getElementById('start-btn').style.display = "inline-block";
-            document.getElementById('status-msg').innerText = "En attente des joueurs...";
+            document.getElementById('status-msg').innerText = "En attente des autres joueurs...";
             
             updateScoreBoard();
         });
@@ -187,40 +196,46 @@
         peer.on('connection', (c) => {
             connections.push(c);
             c.on('open', () => {
-                // Dès qu'un client se connecte, on le synchronise si une partie est en cours
                 if (currentRound.active) {
                     c.send({ type: 'SYNC', round: currentRound, serverTime: currentRound.timeLeft, players: players });
                 }
             });
             c.on('data', (data) => {
-                if (data.type === 'JOIN') {
-                    players[c.peer] = { pseudo: data.pseudo, scorePartie: 0, scoreSession: 0 };
-                    broadcast({ type: 'SCORE_UPDATE', players: players });
-                }
-                if (data.type === 'GUESS') handleGuess(data.word, c.peer);
+                try {
+                    if (data.type === 'JOIN') {
+                        players[c.peer] = { pseudo: data.pseudo, scorePartie: 0, scoreSession: 0 };
+                        broadcast({ type: 'SCORE_UPDATE', players: players });
+                    }
+                    if (data.type === 'GUESS') handleGuess(data.word, c.peer);
+                } catch(e) { console.error(e); }
             });
             c.on('close', () => { connections = connections.filter(conn => conn !== c); });
         });
+
+        peer.on('error', (err) => { document.getElementById('status-msg').innerText = "❌ Erreur Serveur: " + err.type; });
     }
 
     function joinGame() {
         myPseudo = document.getElementById('player-pseudo').value.trim() || "Joueur";
         document.getElementById('join-btn').disabled = true;
-        document.getElementById('status-msg').innerText = "Connexion au salon...";
+        document.getElementById('status-msg').innerText = "Connexion au réseau...";
 
         peer = new Peer({ config: { 'iceServers': [{ url: 'stun:stun.l.google.com:19302' }] } });
 
         peer.on('open', () => {
-            conn = peer.connect(joinId, { reliable: true });
+            document.getElementById('status-msg').innerText = "Recherche de l'hôte...";
+            conn = peer.connect(joinId);
             
             conn.on('open', () => {
-                document.getElementById('status-msg').innerText = "✅ Connecté ! Attente du lancement...";
-                conn.send({ type: 'JOIN', pseudo: myPseudo }); // On envoie le pseudo direct
+                document.getElementById('status-msg').innerText = "✅ Connecté ! En attente du Host...";
+                conn.send({ type: 'JOIN', pseudo: myPseudo }); 
             });
             
             conn.on('data', (data) => handleIncomingData(data));
-            conn.on('close', () => alert("Le Host a fermé la session."));
+            conn.on('close', () => alert("La connexion avec l'hôte a été perdue."));
         });
+
+        peer.on('error', (err) => { document.getElementById('status-msg').innerText = "❌ Erreur: " + err.type; });
     }
 
     // --- LOGIQUE DE JEU ---
@@ -235,21 +250,17 @@
             return true;
         }).sort((a,b) => a.length - b.length);
 
-        // Reset uniquement des scores de la MANCHE (pas de la session)
         for(let id in players) players[id].scorePartie = 0;
 
         currentRound = { 
-            baseWord: base, 
+            baseWord: base,
+            scrambled: base.split('').sort(() => Math.random() - 0.5), // <-- NOUVEAU: Sauvegarde de l'ordre visuel
             solutions: possible, 
             found: [], 
-            timeLeft: 90, // Temps de base
+            timeLeft: 30,
             active: true,
             mystery: possible.length < 12 ? { active: true, letter: base[0], index: 0 } : null 
         };
-
-        // Cache les éléments de fin de partie
-        document.getElementById('end-overlay').style.display = 'none';
-        document.getElementById('feed').innerHTML = ''; // Nettoie l'historique
 
         broadcast({ type: 'START', round: currentRound, players: players });
     }
@@ -258,14 +269,13 @@
         const val = normalize(word);
         if (currentRound.active && currentRound.solutions.includes(val) && !currentRound.found.includes(val)) {
             currentRound.found.push(val);
-            const pts = val.length; // 1 lettre = 1 point
+            const pts = val.length; 
             
             if (players[senderId]) {
                 players[senderId].scorePartie += pts;
                 players[senderId].scoreSession += pts;
             }
             
-            // Bonus de temps
             currentRound.timeLeft = Math.min(180, currentRound.timeLeft + pts);
             
             broadcast({ 
@@ -277,7 +287,6 @@
                 pts: pts
             });
 
-            // Victoire totale ?
             if (currentRound.found.length === currentRound.solutions.length) {
                 currentRound.timeLeft = 0;
                 broadcast({ type: 'END', allSolutions: currentRound.solutions });
@@ -286,51 +295,71 @@
     }
 
     function handleIncomingData(data) {
-        if (data.type === 'START' || data.type === 'SYNC') {
-            currentRound = data.round;
-            players = data.players || players;
-            if (data.serverTime) currentRound.timeLeft = data.serverTime;
-            
-            // Masquer interface de setup / fin de partie
-            document.getElementById('setup-ui').style.display = 'none';
-            document.getElementById('end-overlay').style.display = 'none';
-            document.getElementById('game-layout').style.display = 'flex';
-            document.getElementById('user-input').disabled = false;
-            document.getElementById('user-input').focus();
-            if(data.type === 'START') document.getElementById('feed').innerHTML = ''; // Nettoie le flux
-            
-            renderUI();
-            startVisualTimer();
-        }
-        if (data.type === 'UPDATE') {
-            if(!currentRound.found.includes(data.word)) currentRound.found.push(data.word);
-            currentRound.timeLeft = data.newTime;
-            players = data.players;
-            
-            revealWord(data.word, 'revealed');
-            addToFeed(data.finder, data.word, data.pts);
-            updateScoreBoard();
-        }
-        if (data.type === 'SCORE_UPDATE') {
-            players = data.players;
-            updateScoreBoard();
-        }
-        if (data.type === 'END') {
-            currentRound.active = false;
-            document.getElementById('user-input').disabled = true;
-            document.getElementById('end-overlay').style.display = 'block';
-            
-            // Affiche les mots ratés en rouge/orange
-            data.allSolutions.forEach(w => revealWord(w, currentRound.found.includes(w) ? 'revealed' : 'missed'));
-            
-            // Affiche le bouton rejouer UNIQUEMENT pour le host
-            if (isHost) {
-                document.getElementById('replay-btn').style.display = 'inline-block';
-                document.getElementById('wait-host-msg').style.display = 'none';
-            } else {
-                document.getElementById('replay-btn').style.display = 'none';
-                document.getElementById('wait-host-msg').style.display = 'block';
+        try {
+            if (data.type === 'START' || data.type === 'SYNC') {
+                currentRound = data.round;
+                players = data.players || players;
+                if (data.serverTime) currentRound.timeLeft = data.serverTime;
+                
+                document.getElementById('setup-ui').style.display = 'none';
+                document.getElementById('end-overlay').style.display = 'none';
+                document.getElementById('game-layout').style.display = 'flex';
+                document.getElementById('user-input').disabled = false;
+                document.getElementById('user-input').focus();
+                
+                if(data.type === 'START') document.getElementById('feed').innerHTML = ''; 
+                
+                renderUI();
+                startVisualTimer();
+                
+                // --- NOUVEAU: Shuffle automatique toutes les 20 secondes ---
+                if (autoShuffleInterval) clearInterval(autoShuffleInterval);
+                autoShuffleInterval = setInterval(() => {
+                    if (currentRound.active) shuffleVisual();
+                }, 20000);
             }
+            
+            if (data.type === 'UPDATE') {
+                if(!currentRound.found.includes(data.word)) currentRound.found.push(data.word);
+                currentRound.timeLeft = data.newTime;
+                players = data.players;
+                
+                revealWord(data.word, 'revealed');
+                addToFeed(data.finder, data.word, data.pts);
+                updateScoreBoard();
+            }
+            
+            if (data.type === 'SCORE_UPDATE') {
+                players = data.players;
+                updateScoreBoard();
+            }
+            
+            if (data.type === 'END') {
+                currentRound.active = false;
+                document.getElementById('user-input').disabled = true;
+                
+                if (autoShuffleInterval) clearInterval(autoShuffleInterval); // Stop auto-shuffle
+
+                const endPanel = document.getElementById('end-overlay');
+                endPanel.style.display = 'block';
+                
+                if (data.allSolutions) {
+                    data.allSolutions.forEach(w => {
+                        const isFound = currentRound.found && currentRound.found.includes(w);
+                        revealWord(w, isFound ? 'revealed' : 'missed');
+                    });
+                }
+                
+                if (isHost) {
+                    document.getElementById('replay-btn').style.display = 'inline-block';
+                    document.getElementById('wait-host-msg').style.display = 'none';
+                } else {
+                    document.getElementById('replay-btn').style.display = 'none';
+                    document.getElementById('wait-host-msg').style.display = 'block';
+                }
+            }
+        } catch (err) {
+            console.error("Erreur d'affichage :", err);
         }
     }
 
@@ -340,14 +369,13 @@
         const container = document.getElementById('main-container');
         container.innerHTML = "";
         
-        // Groupement par longueur de mot
         const groups = {};
         currentRound.solutions.forEach(w => { (groups[w.length] = groups[w.length] || []).push(w); });
         
         Object.keys(groups).sort((a,b) => a - b).forEach(len => {
             let html = `<div class="length-section"><div class="length-title">${len} LETTRES</div><div class="word-grid">`;
             groups[len].forEach(w => {
-                const isFound = currentRound.found.includes(w);
+                const isFound = currentRound.found && currentRound.found.includes(w);
                 html += `<div class="word-slot ${isFound?'revealed':''}" id="word-${w}">${isFound ? w : "_ ".repeat(w.length)}</div>`;
             });
             container.innerHTML += html + `</div></div>`;
@@ -357,12 +385,15 @@
 
     function updateScoreBoard() {
         const board = document.getElementById('score-board');
-        // Tri par score de la manche en cours
         board.innerHTML = Object.values(players).sort((a,b) => b.scorePartie - a.scorePartie)
             .map(p => `<div>
                 <span>${p.pseudo}</span>
                 <span><b>${p.scorePartie} pts</b> <small style="color:#64748b">(${p.scoreSession})</small></span>
             </div>`).join('');
+            
+        if (!currentRound.active) {
+            document.getElementById('lobby-display').innerHTML = `👥 <b>Dans le salon :</b> ${Object.values(players).map(p => p.pseudo).join(', ')}`;
+        }
     }
 
     function addToFeed(pseudo, word, pts) {
@@ -371,14 +402,21 @@
     }
 
     function updateDisplayLetters() {
-        let l = currentRound.baseWord.split('');
-        if (currentRound.mystery && !currentRound.found.some(w => w.includes(currentRound.mystery.letter))) {
-            l[currentRound.mystery.index] = "?";
+        if (!currentRound.scrambled) return;
+        
+        // NOUVEAU: On utilise la variable sauvegardée "scrambled" au lieu de générer du hasard ici
+        let l = [...currentRound.scrambled]; 
+        
+        // Gestion de la lettre mystère
+        if (currentRound.mystery && currentRound.found && !currentRound.found.some(w => w.includes(currentRound.mystery.letter))) {
+            let idx = l.indexOf(currentRound.mystery.letter);
+            if (idx !== -1) l[idx] = "?";
             document.getElementById('mystery-badge').innerText = "⚠️ LETTRE MYSTÈRE À TROUVER";
         } else {
             document.getElementById('mystery-badge').innerText = "";
         }
-        document.getElementById('scrambled-display').innerText = l.sort(() => Math.random() - 0.5).join(' ');
+        
+        document.getElementById('scrambled-display').innerText = l.join(' ');
     }
 
     function startVisualTimer() {
@@ -393,7 +431,7 @@
                     broadcast({ type: 'END', allSolutions: currentRound.solutions });
                 }
             } else {
-                currentRound.timeLeft--; // Client déduit visuellement en attendant la synchro
+                currentRound.timeLeft--; 
             }
             
             const t = Math.max(0, currentRound.timeLeft);
@@ -405,27 +443,28 @@
     function revealWord(w, cls) {
         const el = document.getElementById('word-' + w);
         if (el) { el.innerText = w; el.className = 'word-slot ' + cls; }
-        updateDisplayLetters();
+        updateDisplayLetters(); // Va juste mettre à jour l'affichage avec l'ordre actuel
     }
 
     // --- UTILITAIRES ---
     function broadcast(d) { 
-        connections = connections.filter(c => c.open); // Nettoyage des déconnectés
+        connections = connections.filter(c => c.open); 
         connections.forEach(c => c.send(d)); 
-        handleIncomingData(d); // L'hôte s'applique les données à lui-même
+        handleIncomingData(d); 
     }
     
     function shuffleVisual() { 
-        const txt = document.getElementById('scrambled-display').innerText.replace(/\s/g, '').split('');
-        document.getElementById('scrambled-display').innerText = txt.sort(() => Math.random() - 0.5).join(' ');
+        if (!currentRound.active) return;
+        // NOUVEAU: On mélange notre état sauvegardé, puis on demande l'affichage
+        currentRound.scrambled.sort(() => Math.random() - 0.5);
+        updateDisplayLetters();
     }
     
     function copyLink() { 
         navigator.clipboard.writeText(document.getElementById('game-link-input').value);
-        alert("Lien copié !");
+        alert("Lien copié ! Envoie-le à tes joueurs.");
     }
 
-    // Entrée clavier
     document.getElementById('user-input').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             const val = e.target.value.trim();
@@ -440,7 +479,6 @@
         }
     });
 
-    // Lancement auto du dictionnaire au chargement de la page
     loadDict();
 </script>
 </body>
